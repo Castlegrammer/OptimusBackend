@@ -22,7 +22,20 @@ export async function getProveedores(req, res, next) {
     query += ` ORDER BY nombre ASC LIMIT ? OFFSET ?`;
     params.push(Number(limit), offset);
 
-    const [rows] = await pool.query(query, params);
+    let rows;
+    try {
+      [rows] = await pool.query(query, params);
+    } catch (errQuery) {
+      if (errQuery.code === 'ER_BAD_FIELD_ERROR' || String(errQuery.message).includes('fecha_creacion')) {
+        try {
+          await pool.query('ALTER TABLE `Proveedores` ADD COLUMN `fecha_creacion` VARCHAR(50) DEFAULT NULL');
+        } catch (e) {}
+        const fallbackQuery = query.replace('fecha_creacion, ', '');
+        [rows] = await pool.query(fallbackQuery, params);
+      } else {
+        throw errQuery;
+      }
+    }
 
     res.json({
       success: true,

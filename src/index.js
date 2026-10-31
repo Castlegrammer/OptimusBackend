@@ -92,11 +92,12 @@ app.get('/api/v1/health/db', async (req, res) => {
 // Inicialización forzada de tablas desde endpoint
 app.post('/api/v1/health/setup-db', async (req, res) => {
   try {
-    await initDatabaseTables();
+    const reports = await initDatabaseTables();
     const [tables] = await pool.query('SHOW TABLES');
     res.json({
       success: true,
       message: 'Tablas creadas y migradas exitosamente',
+      reports,
       tables: tables.map(t => Object.values(t)[0])
     });
   } catch (err) {

@@ -34,8 +34,36 @@ export async function testDbConnection() {
 }
 
 export async function initDatabaseTables() {
+  const reports = [];
+
+  // 1. Asegurar columna fecha_creacion en Proveedores
   try {
-    // 1. Asegurar tabla Cuenta (PascalCase) exactamente como está en el sistema
+    await pool.query(`ALTER TABLE \`Proveedores\` ADD COLUMN \`fecha_creacion\` VARCHAR(50) DEFAULT NULL`);
+    reports.push('Proveedores: fecha_creacion añadida');
+    console.log('✅ Columna fecha_creacion asegurada en tabla Proveedores');
+  } catch (e) {
+    if (e.code === 'ER_DUP_FIELDNAME' || e.errno === 1060) {
+      reports.push('Proveedores: fecha_creacion ya existe');
+    } else {
+      reports.push(`Proveedores error: ${e.message}`);
+    }
+  }
+
+  // 2. Asegurar columna fecha_creacion en Clientes
+  try {
+    await pool.query(`ALTER TABLE \`Clientes\` ADD COLUMN \`fecha_creacion\` VARCHAR(50) DEFAULT NULL`);
+    reports.push('Clientes: fecha_creacion añadida');
+    console.log('✅ Columna fecha_creacion asegurada en tabla Clientes');
+  } catch (e) {
+    if (e.code === 'ER_DUP_FIELDNAME' || e.errno === 1060) {
+      reports.push('Clientes: fecha_creacion ya existe');
+    } else {
+      reports.push(`Clientes error: ${e.message}`);
+    }
+  }
+
+  // 3. Asegurar tabla Cuenta
+  try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS \`Cuenta\` (
         \`id\` INT AUTO_INCREMENT PRIMARY KEY,
@@ -55,36 +83,26 @@ export async function initDatabaseTables() {
         INDEX idx_cuenta_email (email)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
+    reports.push('Cuenta: tabla verificada');
+  } catch (e) {
+    reports.push(`Cuenta error: ${e.message}`);
+  }
 
-    // 2. Si la tabla Cuenta está vacía, insertar cuenta Administrador inicial (password: admin123)
+  // 4. Si la tabla Cuenta está vacía, insertar cuenta Administrador inicial
+  try {
     const [existing] = await pool.query('SELECT COUNT(*) as count FROM `Cuenta`');
-    if (existing[0].count === 0) {
+    if (existing[0]?.count === 0) {
       const defaultHash = '$2b$10$oI49RGjSF5uTWm/U1vB0UOVnXMC.tIhs6I3HYAJRavov1iku1AbNm';
       await pool.query(`
         INSERT INTO \`Cuenta\` (id, IDCuenta, uuid, Nombre, email, Clave, password_hash, Moneda, Tipo, Fecha)
         VALUES (1, 1, 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Administrador', 'admin@optimus360.com', 'admin123', ?, 'USD', 'Administrador', CURDATE())
         ON DUPLICATE KEY UPDATE id=id
       `, [defaultHash]);
+      reports.push('Cuenta admin inicial creada');
     }
-
-    console.log('✅ Tabla Cuenta lista y verificada en MySQL');
-
-    // 3. Asegurar columna fecha_creacion en Proveedores
-    try {
-      await pool.query(`ALTER TABLE \`Proveedores\` ADD COLUMN \`fecha_creacion\` VARCHAR(50) DEFAULT NULL`);
-      console.log('✅ Columna fecha_creacion asegurada en tabla Proveedores');
-    } catch (e) {
-      // Ignorar si ya existe (código 1060: Duplicate column name)
-    }
-
-    // 4. Asegurar columna fecha_creacion en Clientes
-    try {
-      await pool.query(`ALTER TABLE \`Clientes\` ADD COLUMN \`fecha_creacion\` VARCHAR(50) DEFAULT NULL`);
-      console.log('✅ Columna fecha_creacion asegurada en tabla Clientes');
-    } catch (e) {
-      // Ignorar si ya existe
-    }
-  } catch (err) {
-    console.error('⚠️ Estado de tablas en MySQL:', err.message);
+  } catch (e) {
+    reports.push(`Admin insert error: ${e.message}`);
   }
+
+  return reports;
 }
