@@ -11,6 +11,7 @@ import authRoutes from './routes/auth.routes.js';
 import syncRoutes from './routes/sync.routes.js';
 import productosRoutes from './routes/productos.routes.js';
 import clientesRoutes from './routes/clientes.routes.js';
+import proveedoresRoutes from './routes/proveedores.routes.js';
 import ventasRoutes from './routes/ventas.routes.js';
 import categoriasRoutes from './routes/categorias.routes.js';
 
@@ -111,6 +112,7 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/sync', syncRoutes);
 app.use('/api/v1/productos', productosRoutes);
 app.use('/api/v1/clientes', clientesRoutes);
+app.use('/api/v1/proveedores', proveedoresRoutes);
 app.use('/api/v1/ventas', ventasRoutes);
 app.use('/api/v1/categorias', categoriasRoutes);
 

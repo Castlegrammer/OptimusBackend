@@ -35,6 +35,14 @@ export const clienteCreateSchema = z.object({
   zona: z.string().optional().default('')
 });
 
+export const proveedorCreateSchema = z.object({
+  nombre: z.string().trim().min(1, 'El nombre del proveedor es obligatorio'),
+  responsable: z.string().optional().default(''),
+  direccion: z.string().optional().default(''),
+  telefono: z.string().optional().default(''),
+  zona: z.string().optional().default('')
+});
+
 export const ventaItemSchema = z.object({
   producto_uuid: z.string().nullable().optional(),
   producto: z.string().min(1, 'Nombre de producto requerido'),
