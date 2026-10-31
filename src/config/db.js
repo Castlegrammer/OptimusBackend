@@ -68,7 +68,23 @@ export async function initDatabaseTables() {
     }
 
     console.log('✅ Tabla Cuenta lista y verificada en MySQL');
+
+    // 3. Asegurar columna fecha_creacion en Proveedores
+    try {
+      await pool.query(`ALTER TABLE \`Proveedores\` ADD COLUMN \`fecha_creacion\` VARCHAR(50) DEFAULT NULL`);
+      console.log('✅ Columna fecha_creacion asegurada en tabla Proveedores');
+    } catch (e) {
+      // Ignorar si ya existe (código 1060: Duplicate column name)
+    }
+
+    // 4. Asegurar columna fecha_creacion en Clientes
+    try {
+      await pool.query(`ALTER TABLE \`Clientes\` ADD COLUMN \`fecha_creacion\` VARCHAR(50) DEFAULT NULL`);
+      console.log('✅ Columna fecha_creacion asegurada en tabla Clientes');
+    } catch (e) {
+      // Ignorar si ya existe
+    }
   } catch (err) {
-    console.error('⚠️ Estado de tabla Cuenta en MySQL:', err.message);
+    console.error('⚠️ Estado de tablas en MySQL:', err.message);
   }
 }

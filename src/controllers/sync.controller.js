@@ -69,21 +69,62 @@ export async function pushSync(req, res, next) {
       totalProcesados++;
     }
 
-    // 3. Proveedores
+    // 3. Proveedores (con asignación automática de fecha y hora actual)
     for (const p of proveedores) {
-      await connection.query(
-        `INSERT INTO Proveedores (cuenta_id, uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, eliminado)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-           nombre = VALUES(nombre),
-           responsable = VALUES(responsable),
-           direccion = VALUES(direccion),
-           telefono = VALUES(telefono),
-           zona = VALUES(zona),
-           fecha_creacion = VALUES(fecha_creacion),
-           eliminado = VALUES(eliminado)`,
-        [cuentaId, p.uuid, p.nombre, p.responsable || '', p.direccion || '', p.telefono || '', p.zona || '', p.fecha_creacion || '', p.eliminado ? 1 : 0]
-      );
+      const nowP = new Date();
+      const padP = (n) => String(n).padStart(2, '0');
+      const autoNowP = `${nowP.getFullYear()}-${padP(nowP.getMonth() + 1)}-${padP(nowP.getDate())} ${padP(nowP.getHours())}:${padP(nowP.getMinutes())}:${padP(nowP.getSeconds())}`;
+      const fechaCreacionP = p.fecha_creacion || autoNowP;
+
+      try {
+        await connection.query(
+          `INSERT INTO Proveedores (cuenta_id, uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, eliminado)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+             nombre = VALUES(nombre),
+             responsable = VALUES(responsable),
+             direccion = VALUES(direccion),
+             telefono = VALUES(telefono),
+             zona = VALUES(zona),
+             fecha_creacion = COALESCE(VALUES(fecha_creacion), fecha_creacion),
+             eliminado = VALUES(eliminado)`,
+          [cuentaId, p.uuid, p.nombre, p.responsable || '', p.direccion || '', p.telefono || '', p.zona || '', fechaCreacionP, p.eliminado ? 1 : 0]
+        );
+      } catch (errProv) {
+        if (errProv.code === 'ER_BAD_FIELD_ERROR' || String(errProv.message).includes('fecha_creacion')) {
+          try {
+            await connection.query('ALTER TABLE `Proveedores` ADD COLUMN `fecha_creacion` VARCHAR(50) DEFAULT NULL');
+            await connection.query(
+              `INSERT INTO Proveedores (cuenta_id, uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, eliminado)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON DUPLICATE KEY UPDATE
+                 nombre = VALUES(nombre),
+                 responsable = VALUES(responsable),
+                 direccion = VALUES(direccion),
+                 telefono = VALUES(telefono),
+                 zona = VALUES(zona),
+                 fecha_creacion = COALESCE(VALUES(fecha_creacion), fecha_creacion),
+                 eliminado = VALUES(eliminado)`,
+              [cuentaId, p.uuid, p.nombre, p.responsable || '', p.direccion || '', p.telefono || '', p.zona || '', fechaCreacionP, p.eliminado ? 1 : 0]
+            );
+          } catch (e2) {
+            await connection.query(
+              `INSERT INTO Proveedores (cuenta_id, uuid, nombre, responsable, direccion, telefono, zona, eliminado)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+               ON DUPLICATE KEY UPDATE
+                 nombre = VALUES(nombre),
+                 responsable = VALUES(responsable),
+                 direccion = VALUES(direccion),
+                 telefono = VALUES(telefono),
+                 zona = VALUES(zona),
+                 eliminado = VALUES(eliminado)`,
+              [cuentaId, p.uuid, p.nombre, p.responsable || '', p.direccion || '', p.telefono || '', p.zona || '', p.eliminado ? 1 : 0]
+            );
+          }
+        } else {
+          throw errProv;
+        }
+      }
       syncedUuids.proveedores.push(p.uuid);
       totalProcesados++;
     }

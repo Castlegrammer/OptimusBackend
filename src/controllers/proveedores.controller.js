@@ -40,20 +40,57 @@ export async function createProveedor(req, res, next) {
     const cuentaId = req.user.id;
     const provUuid = uuidv4();
     const data = req.body;
-    const today = new Date().toISOString().split('T')[0];
+    
+    // Asignar fecha y hora actual automáticamente
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const autoNow = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    const fechaCreacion = data.fecha_creacion || autoNow;
 
-    const [result] = await pool.query(
-      `INSERT INTO Proveedores (cuenta_id, uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, eliminado)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-      [cuentaId, provUuid, data.nombre, data.responsable || '', data.direccion || '', data.telefono || '', data.zona || '', today]
-    );
+    try {
+      const [result] = await pool.query(
+        `INSERT INTO Proveedores (cuenta_id, uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, eliminado)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+        [cuentaId, provUuid, data.nombre, data.responsable || '', data.direccion || '', data.telefono || '', data.zona || '', fechaCreacion]
+      );
 
-    res.status(201).json({
-      success: true,
-      message: 'Proveedor creado exitosamente',
-      id: result.insertId,
-      uuid: provUuid
-    });
+      return res.status(201).json({
+        success: true,
+        message: 'Proveedor registrado exitosamente',
+        id: result.insertId,
+        uuid: provUuid
+      });
+    } catch (errQuery) {
+      if (errQuery.code === 'ER_BAD_FIELD_ERROR' || String(errQuery.message).includes('fecha_creacion')) {
+        try {
+          await pool.query('ALTER TABLE `Proveedores` ADD COLUMN `fecha_creacion` VARCHAR(50) DEFAULT NULL');
+          const [res2] = await pool.query(
+            `INSERT INTO Proveedores (cuenta_id, uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, eliminado)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+            [cuentaId, provUuid, data.nombre, data.responsable || '', data.direccion || '', data.telefono || '', data.zona || '', fechaCreacion]
+          );
+          return res.status(201).json({
+            success: true,
+            message: 'Proveedor registrado exitosamente',
+            id: res2.insertId,
+            uuid: provUuid
+          });
+        } catch (e2) {
+          const [res3] = await pool.query(
+            `INSERT INTO Proveedores (cuenta_id, uuid, nombre, responsable, direccion, telefono, zona, eliminado)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
+            [cuentaId, provUuid, data.nombre, data.responsable || '', data.direccion || '', data.telefono || '', data.zona || '']
+          );
+          return res.status(201).json({
+            success: true,
+            message: 'Proveedor registrado exitosamente',
+            id: res3.insertId,
+            uuid: provUuid
+          });
+        }
+      }
+      throw errQuery;
+    }
   } catch (error) {
     next(error);
   }
