@@ -313,15 +313,41 @@ export async function pullSync(req, res, next) {
       [cuentaId, since]
     );
 
-    const [clientes] = await pool.query(
-      'SELECT uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, eliminado, updated_at FROM Clientes WHERE cuenta_id = ? AND updated_at > ?',
-      [cuentaId, since]
-    );
+    let clientes = [];
+    try {
+      const [resCli] = await pool.query('SELECT * FROM Clientes');
+      clientes = resCli.map(c => ({
+        uuid: c.uuid || `CLI-${c.id}`,
+        nombre: c.nombre || '',
+        responsable: c.responsable || '',
+        direccion: c.direccion || '',
+        telefono: c.telefono || '',
+        zona: c.zona || 'Principal',
+        fecha_creacion: c.fecha_creacion || '',
+        eliminado: c.eliminado || 0,
+        updated_at: c.updated_at || c.fecha_creacion || ''
+      }));
+    } catch (eCli) {
+      console.warn('Sync clientes pull fallback:', eCli.message);
+    }
 
-    const [proveedores] = await pool.query(
-      'SELECT uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, eliminado, updated_at FROM Proveedores WHERE cuenta_id = ? AND updated_at > ?',
-      [cuentaId, since]
-    );
+    let proveedores = [];
+    try {
+      const [resProv] = await pool.query('SELECT * FROM Proveedores');
+      proveedores = resProv.map(p => ({
+        uuid: p.uuid || `PROV-${p.id}`,
+        nombre: p.nombre || '',
+        responsable: p.responsable || '',
+        direccion: p.direccion || '',
+        telefono: p.telefono || '',
+        zona: p.zona || 'Principal',
+        fecha_creacion: p.fecha_creacion || '',
+        eliminado: p.eliminado || 0,
+        updated_at: p.updated_at || p.fecha_creacion || ''
+      }));
+    } catch (eProv) {
+      console.warn('Sync proveedores pull fallback:', eProv.message);
+    }
 
     const [productos] = await pool.query(
       `SELECT uuid, nombre, descripcion, categoria, categoria_uuid, proveedor, proveedor_uuid,

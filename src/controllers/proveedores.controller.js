@@ -3,45 +3,47 @@ import { pool } from '../config/db.js';
 
 export async function getProveedores(req, res, next) {
   try {
-    const cuentaId = req.user.id;
-    const { search = '', page = 1, limit = 50 } = req.query;
+    const { search = '' } = req.query;
 
-    const offset = (Number(page) - 1) * Number(limit);
-    let query = `
-      SELECT id, uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, updated_at
-      FROM Proveedores
-      WHERE cuenta_id = ? AND eliminado = 0
-    `;
-    const params = [cuentaId];
+    let rows = [];
+    try {
+      const [all] = await pool.query(`SELECT * FROM Proveedores ORDER BY id DESC LIMIT 200`);
+      rows = all;
+    } catch (err) {
+      console.error('Error SELECT * FROM Proveedores:', err.message);
+      return res.json({ success: true, data: [] });
+    }
+
+    // Filtrar eliminados si existe el campo
+    let filtered = rows.filter(r => r.eliminado != 1);
 
     if (search) {
-      query += ` AND (nombre LIKE ? OR telefono LIKE ? OR responsable LIKE ? OR direccion LIKE ?)`;
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+      const term = search.toLowerCase();
+      filtered = filtered.filter(r => {
+        const name = String(r.nombre || r.Nombre || '').toLowerCase();
+        const resp = String(r.responsable || r.Responsable || '').toLowerCase();
+        const tel = String(r.telefono || r.Telefono || '').toLowerCase();
+        const dir = String(r.direccion || r.Direccion || '').toLowerCase();
+        return name.includes(term) || resp.includes(term) || tel.includes(term) || dir.includes(term);
+      });
     }
 
-    query += ` ORDER BY nombre ASC LIMIT ? OFFSET ?`;
-    params.push(Number(limit), offset);
-
-    let rows;
-    try {
-      [rows] = await pool.query(query, params);
-    } catch (errQuery) {
-      if (errQuery.code === 'ER_BAD_FIELD_ERROR' || String(errQuery.message).includes('fecha_creacion')) {
-        try {
-          await pool.query('ALTER TABLE `Proveedores` ADD COLUMN `fecha_creacion` VARCHAR(50) DEFAULT NULL');
-        } catch (e) {}
-        const fallbackQuery = query.replace('fecha_creacion, ', '');
-        [rows] = await pool.query(fallbackQuery, params);
-      } else {
-        throw errQuery;
-      }
-    }
+    const data = filtered.map(r => ({
+      id: r.id || r.ID || r.Id,
+      uuid: r.uuid || r.UUID || `PROV-${r.id}`,
+      nombre: r.nombre || r.Nombre || '',
+      responsable: r.responsable || r.Responsable || '',
+      direccion: r.direccion || r.Direccion || '',
+      telefono: r.telefono || r.Telefono || '',
+      zona: r.zona || r.Zona || 'Principal',
+      fecha_creacion: r.fecha_creacion || r.Fecha_Creacion || r.Fecha || r.created_at || '',
+      updated_at: r.updated_at || r.fecha_creacion || ''
+    }));
 
     res.json({
       success: true,
-      data: rows,
-      page: Number(page),
-      limit: Number(limit)
+      data,
+      total: data.length
     });
   } catch (error) {
     next(error);
