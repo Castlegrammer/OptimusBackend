@@ -4,7 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 
-import { testDbConnection } from './config/db.js';
+import { pool, testDbConnection, initDatabaseTables } from './config/db.js';
 import { notFoundHandler, errorHandler } from './middlewares/error.middleware.js';
 
 import authRoutes from './routes/auth.routes.js';
@@ -58,6 +58,57 @@ app.get('/api/v1/health', (req, res) => {
     version: '1.0.0',
     timestamp: new Date().toISOString()
   });
+});
+
+// Diagnóstico de base de datos MySQL en vivo
+app.get('/api/v1/health/db', async (req, res) => {
+  try {
+    const [tables] = await pool.query('SHOW TABLES');
+    const tableList = tables.map(t => Object.values(t)[0]);
+    
+    let userCount = 0;
+    try {
+      const [c] = await pool.query('SELECT COUNT(*) as count FROM `cuentas`');
+      userCount = c[0].count;
+    } catch (e1) {
+      try {
+        const [c2] = await pool.query('SELECT COUNT(*) as count FROM `Cuenta`');
+        userCount = c2[0].count;
+      } catch (e2) {}
+    }
+
+    res.json({
+      success: true,
+      database: process.env.DB_NAME || 'optimus_db',
+      connected: true,
+      tables: tableList,
+      user_count: userCount,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+
+// Inicialización forzada de tablas desde endpoint
+app.post('/api/v1/health/setup-db', async (req, res) => {
+  try {
+    await initDatabaseTables();
+    const [tables] = await pool.query('SHOW TABLES');
+    res.json({
+      success: true,
+      message: 'Tablas creadas y migradas exitosamente',
+      tables: tables.map(t => Object.values(t)[0])
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
 });
 
 // Rutas principales
