@@ -50,19 +50,18 @@ export async function login(req, res, next) {
     }
 
     let isMatch = false;
-    if (user.password_hash) {
+    let shouldEncrypt = false;
+
+    if (user.password_hash && String(user.password_hash).startsWith('$2')) {
       isMatch = await bcrypt.compare(password, user.password_hash);
-    } else if (user.Clave || user.clave) {
-      const storedPass = user.Clave || user.clave;
-      isMatch = (storedPass === password);
-      // Si hizo match con la clave plana, intentamos actualizar el password_hash
-      if (isMatch) {
-        try {
-          const salt = await bcrypt.genSalt(10);
-          const hash = await bcrypt.hash(password, salt);
-          await pool.query(`UPDATE ${tableName} SET password_hash = ? WHERE LOWER(email) = LOWER(?)`, [hash, email]);
-        } catch (e) {
-          // ignora si no existe la columna password_hash
+    } else {
+      const rawClave = String(user.Clave || user.clave || user.password_hash || '');
+      if (rawClave.startsWith('$2')) {
+        isMatch = await bcrypt.compare(password, rawClave);
+      } else {
+        isMatch = (rawClave === password);
+        if (isMatch) {
+          shouldEncrypt = true;
         }
       }
     }
@@ -72,6 +71,22 @@ export async function login(req, res, next) {
         success: false,
         message: 'Credenciales inválidas. Contraseña incorrecta.'
       });
+    }
+
+    // Si la contraseña no estaba encriptada en la BD, la encriptamos de inmediato
+    if (shouldEncrypt) {
+      try {
+        const salt = await bcrypt.genSalt(10);
+        const hash = await bcrypt.hash(password, salt);
+        try {
+          await pool.query(`UPDATE ${tableName} SET password_hash = ? WHERE LOWER(email) = LOWER(?)`, [hash, email]);
+        } catch (e1) {}
+        try {
+          await pool.query(`UPDATE ${tableName} SET Clave = ? WHERE LOWER(email) = LOWER(?)`, [hash, email]);
+        } catch (e2) {}
+      } catch (errEnc) {
+        console.error("Error auto-encriptando clave:", errEnc);
+      }
     }
 
     const userId = user.id || user.IDCuenta || user.IDUsuario || user.Id || 1;
