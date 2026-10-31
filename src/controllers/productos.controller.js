@@ -3,39 +3,57 @@ import { pool } from '../config/db.js';
 
 export async function getProductos(req, res, next) {
   try {
-    const cuentaId = req.user.id;
-    const { search = '', categoria = '', page = 1, limit = 50 } = req.query;
+    const cuentaId = req.user?.id || 1;
+    const { search = '', categoria = '' } = req.query;
 
-    const offset = (Number(page) - 1) * Number(limit);
-    let query = `
-      SELECT id, uuid, nombre, descripcion, categoria, categoria_uuid, proveedor, proveedor_uuid,
-             marca, tamano, color, cantidad, costo, precio, unidad, maximo, minimo,
-             fecha_vencimiento, foto, updated_at
-      FROM Productos
-      WHERE (cuenta_id = ? OR (cuenta_id IS NULL AND ? = 1)) AND (eliminado = 0 OR eliminado IS NULL)
-    `;
+    let query = 'SELECT * FROM Productos WHERE (cuenta_id = ? OR (cuenta_id IS NULL AND ? = 1)) AND (eliminado = 0 OR eliminado IS NULL)';
     const params = [cuentaId, cuentaId];
 
     if (search) {
-      query += ` AND (nombre LIKE ? OR marca LIKE ? OR descripcion LIKE ?)`;
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      query += ' AND (LOWER(nombre) LIKE ? OR LOWER(descripcion) LIKE ? OR LOWER(marca) LIKE ?)';
+      const term = `%${search.toLowerCase()}%`;
+      params.push(term, term, term);
     }
 
-    if (categoria) {
-      query += ` AND categoria = ?`;
+    if (categoria && categoria !== 'Todas') {
+      query += ' AND LOWER(categoria) = LOWER(?)';
       params.push(categoria);
     }
 
-    query += ` ORDER BY nombre ASC LIMIT ? OFFSET ?`;
-    params.push(Number(limit), offset);
+    query += ' ORDER BY 1 DESC LIMIT 300';
 
     const [rows] = await pool.query(query, params);
 
     res.json({
       success: true,
       data: rows,
-      page: Number(page),
-      limit: Number(limit)
+      total: rows.length
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getProductoByUuid(req, res, next) {
+  try {
+    const cuentaId = req.user?.id || 1;
+    const { uuid } = req.params;
+
+    const [rows] = await pool.query(
+      'SELECT * FROM Productos WHERE (uuid = ? OR id = ? OR IDProducto = ?) AND (cuenta_id = ? OR cuenta_id IS NULL) LIMIT 1',
+      [uuid, uuid, uuid, cuentaId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Producto no encontrado'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: rows[0]
     });
   } catch (error) {
     next(error);
@@ -44,7 +62,7 @@ export async function getProductos(req, res, next) {
 
 export async function createProducto(req, res, next) {
   try {
-    const cuentaId = req.user.id;
+    const cuentaId = req.user?.id || 1;
     const prodUuid = uuidv4();
     const data = req.body;
 
@@ -75,7 +93,7 @@ export async function createProducto(req, res, next) {
 
 export async function updateProducto(req, res, next) {
   try {
-    const cuentaId = req.user.id;
+    const cuentaId = req.user?.id || 1;
     const { uuid } = req.params;
     const data = req.body;
 
@@ -98,12 +116,12 @@ export async function updateProducto(req, res, next) {
         minimo = COALESCE(?, minimo),
         fecha_vencimiento = COALESCE(?, fecha_vencimiento),
         foto = COALESCE(?, foto)
-       WHERE uuid = ? AND cuenta_id = ?`,
+       WHERE (uuid = ? OR id = ? OR IDProducto = ?) AND (cuenta_id = ? OR cuenta_id IS NULL)`,
       [
         data.nombre, data.descripcion, data.categoria, data.categoria_uuid,
         data.proveedor, data.proveedor_uuid, data.marca, data.tamano, data.color,
         data.cantidad, data.costo, data.precio, data.unidad, data.maximo,
-        data.minimo, data.fecha_vencimiento, data.foto, uuid, cuentaId
+        data.minimo, data.fecha_vencimiento, data.foto, uuid, uuid, uuid, cuentaId
       ]
     );
 
@@ -125,13 +143,13 @@ export async function updateProducto(req, res, next) {
 
 export async function deleteProducto(req, res, next) {
   try {
-    const cuentaId = req.user.id;
+    const cuentaId = req.user?.id || 1;
     const { uuid } = req.params;
 
     // Soft delete para permitir sincronización
     const [result] = await pool.query(
-      'UPDATE Productos SET eliminado = 1 WHERE uuid = ? AND cuenta_id = ?',
-      [uuid, cuentaId]
+      'UPDATE Productos SET eliminado = 1 WHERE (uuid = ? OR id = ? OR IDProducto = ?) AND (cuenta_id = ? OR cuenta_id IS NULL)',
+      [uuid, uuid, uuid, cuentaId]
     );
 
     if (result.affectedRows === 0) {
