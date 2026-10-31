@@ -8,7 +8,7 @@ export async function login(req, res, next) {
     const { email, password } = req.body;
 
     const [rows] = await pool.query(
-      'SELECT id, uuid, nombre, email, password_hash, moneda, tipo, activo, eliminado FROM cuentas WHERE email = ? LIMIT 1',
+      'SELECT * FROM Cuenta WHERE LOWER(email) = LOWER(?) LIMIT 1',
       [email]
     );
 
@@ -21,14 +21,32 @@ export async function login(req, res, next) {
 
     const user = rows[0];
 
-    if (user.eliminado || !user.activo) {
+    // Verificar si está inactivo o eliminado si existen las columnas
+    if (user.eliminado === 1 || user.activo === 0) {
       return res.status(403).json({
         success: false,
         message: 'La cuenta se encuentra inactiva o deshabilitada.'
       });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password_hash);
+    let isMatch = false;
+    if (user.password_hash) {
+      isMatch = await bcrypt.compare(password, user.password_hash);
+    } else if (user.Clave || user.clave) {
+      const storedPass = user.Clave || user.clave;
+      isMatch = (storedPass === password);
+      // Si hizo match con la clave plana, actualizamos el password_hash
+      if (isMatch) {
+        try {
+          const salt = await bcrypt.genSalt(10);
+          const hash = await bcrypt.hash(password, salt);
+          await pool.query('UPDATE Cuenta SET password_hash = ? WHERE LOWER(email) = LOWER(?)', [hash, email]);
+        } catch (e) {
+          // ignora si no existe la columna en MySQL
+        }
+      }
+    }
+
     if (!isMatch) {
       return res.status(401).json({
         success: false,
@@ -36,14 +54,21 @@ export async function login(req, res, next) {
       });
     }
 
+    const userId = user.id || user.IDCuenta || user.Id || 1;
+    const userUuid = user.uuid || user.UUID || uuidv4();
+    const userName = user.Nombre || user.nombre || 'Administrador';
+    const userEmail = user.email || user.Email || email;
+    const userMoneda = user.Moneda || user.moneda || 'USD';
+    const userTipo = user.Tipo || user.tipo || 'Administrador';
+
     const token = jwt.sign(
       {
-        id: user.id,
-        uuid: user.uuid,
-        email: user.email,
-        nombre: user.nombre,
-        tipo: user.tipo,
-        moneda: user.moneda
+        id: userId,
+        uuid: userUuid,
+        email: userEmail,
+        nombre: userName,
+        tipo: userTipo,
+        moneda: userMoneda
       },
       process.env.JWT_SECRET || 'super_secret_optimus360_jwt_key_2026_xyz987',
       { expiresIn: process.env.JWT_EXPIRES_IN || '30d' }
@@ -54,12 +79,12 @@ export async function login(req, res, next) {
       message: 'Inicio de sesión exitoso',
       token,
       user: {
-        id: user.id,
-        uuid: user.uuid,
-        nombre: user.nombre,
-        email: user.email,
-        moneda: user.moneda,
-        tipo: user.tipo
+        id: userId,
+        uuid: userUuid,
+        nombre: userName,
+        email: userEmail,
+        moneda: userMoneda,
+        tipo: userTipo
       }
     });
   } catch (error) {
@@ -72,7 +97,7 @@ export async function register(req, res, next) {
     const { nombre, email, password, moneda = 'USD', tipo = 'Administrador' } = req.body;
 
     const [existing] = await pool.query(
-      'SELECT id FROM cuentas WHERE email = ? LIMIT 1',
+      'SELECT email FROM Cuenta WHERE LOWER(email) = LOWER(?) LIMIT 1',
       [email]
     );
 
@@ -86,16 +111,19 @@ export async function register(req, res, next) {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
     const userUuid = uuidv4();
+    const today = new Date().toISOString().split('T')[0];
 
     const [result] = await pool.query(
-      `INSERT INTO cuentas (uuid, nombre, email, password_hash, moneda, tipo)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [userUuid, nombre, email, passwordHash, moneda, tipo]
+      `INSERT INTO Cuenta (uuid, Nombre, email, Clave, password_hash, Moneda, Tipo, Fecha, activo, eliminado)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0)`,
+      [userUuid, nombre, email, password, passwordHash, moneda, tipo, today]
     );
+
+    const userId = result.insertId || 1;
 
     const token = jwt.sign(
       {
-        id: result.insertId,
+        id: userId,
         uuid: userUuid,
         email,
         nombre,
@@ -111,7 +139,7 @@ export async function register(req, res, next) {
       message: 'Cuenta registrada exitosamente',
       token,
       user: {
-        id: result.insertId,
+        id: userId,
         uuid: userUuid,
         nombre,
         email,
@@ -127,8 +155,8 @@ export async function register(req, res, next) {
 export async function getProfile(req, res, next) {
   try {
     const [rows] = await pool.query(
-      'SELECT id, uuid, nombre, email, moneda, tipo, created_at, updated_at FROM cuentas WHERE id = ? LIMIT 1',
-      [req.user.id]
+      'SELECT * FROM Cuenta WHERE id = ? OR LOWER(email) = LOWER(?) LIMIT 1',
+      [req.user.id, req.user.email]
     );
 
     if (rows.length === 0) {
@@ -138,9 +166,17 @@ export async function getProfile(req, res, next) {
       });
     }
 
+    const user = rows[0];
     res.json({
       success: true,
-      user: rows[0]
+      user: {
+        id: user.id || user.IDCuenta || req.user.id,
+        uuid: user.uuid || req.user.uuid,
+        nombre: user.Nombre || user.nombre,
+        email: user.email || user.Email,
+        moneda: user.Moneda || user.moneda,
+        tipo: user.Tipo || user.tipo
+      }
     });
   } catch (error) {
     next(error);
