@@ -11,7 +11,7 @@ export async function getProductos(req, res, next) {
       SELECT id, uuid, nombre, descripcion, categoria, categoria_uuid, proveedor, proveedor_uuid,
              marca, tamano, color, cantidad, costo, precio, unidad, maximo, minimo,
              fecha_vencimiento, foto, updated_at
-      FROM productos
+      FROM Productos
       WHERE cuenta_id = ? AND eliminado = 0
     `;
     const params = [cuentaId];
@@ -49,7 +49,7 @@ export async function createProducto(req, res, next) {
     const data = req.body;
 
     const [result] = await pool.query(
-      `INSERT INTO productos (
+      `INSERT INTO Productos (
         cuenta_id, uuid, nombre, descripcion, categoria, categoria_uuid,
         proveedor, proveedor_uuid, marca, tamano, color, cantidad,
         costo, precio, unidad, maximo, minimo, fecha_vencimiento, foto, eliminado
@@ -80,7 +80,7 @@ export async function updateProducto(req, res, next) {
     const data = req.body;
 
     const [result] = await pool.query(
-      `UPDATE productos SET
+      `UPDATE Productos SET
         nombre = COALESCE(?, nombre),
         descripcion = COALESCE(?, descripcion),
         categoria = COALESCE(?, categoria),
@@ -130,7 +130,7 @@ export async function deleteProducto(req, res, next) {
 
     // Soft delete para permitir sincronización
     const [result] = await pool.query(
-      'UPDATE productos SET eliminado = 1 WHERE uuid = ? AND cuenta_id = ?',
+      'UPDATE Productos SET eliminado = 1 WHERE uuid = ? AND cuenta_id = ?',
       [uuid, cuentaId]
     );
 

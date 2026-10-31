@@ -9,7 +9,7 @@ export async function getVentas(req, res, next) {
 
     const [rows] = await pool.query(
       `SELECT id, uuid, cliente, cliente_uuid, fecha, total, inicial, updated_at
-       FROM ventas
+       FROM Ventas
        WHERE cuenta_id = ? AND eliminado = 0
        ORDER BY id DESC LIMIT ? OFFSET ?`,
       [cuentaId, Number(limit), offset]
@@ -33,7 +33,7 @@ export async function getVentaById(req, res, next) {
 
     const [ventas] = await pool.query(
       `SELECT id, uuid, cliente, cliente_uuid, fecha, total, inicial, updated_at
-       FROM ventas WHERE uuid = ? AND cuenta_id = ? AND eliminado = 0 LIMIT 1`,
+       FROM Ventas WHERE uuid = ? AND cuenta_id = ? AND eliminado = 0 LIMIT 1`,
       [uuid, cuentaId]
     );
 
@@ -46,7 +46,7 @@ export async function getVentaById(req, res, next) {
 
     const [detalles] = await pool.query(
       `SELECT uuid, producto_uuid, producto, cantidad, precio, total, fecha
-       FROM venta_detalles
+       FROM VentaDetalles
        WHERE venta_uuid = ? AND cuenta_id = ? AND eliminado = 0`,
       [uuid, cuentaId]
     );
@@ -76,7 +76,7 @@ export async function createVenta(req, res, next) {
 
     // 1. Insertar cabecera de la venta
     const [result] = await connection.query(
-      `INSERT INTO ventas (cuenta_id, uuid, cliente, cliente_uuid, fecha, total, inicial, eliminado)
+      `INSERT INTO Ventas (cuenta_id, uuid, cliente, cliente_uuid, fecha, total, inicial, eliminado)
        VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
       [cuentaId, ventaUuid, cliente, cliente_uuid, ventaFecha, total, inicial]
     );
@@ -86,7 +86,7 @@ export async function createVenta(req, res, next) {
       const detalleUuid = uuidv4();
 
       await connection.query(
-        `INSERT INTO venta_detalles (cuenta_id, uuid, venta_uuid, producto_uuid, producto, cantidad, precio, total, fecha, eliminado)
+        `INSERT INTO VentaDetalles (cuenta_id, uuid, venta_uuid, producto_uuid, producto, cantidad, precio, total, fecha, eliminado)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
         [cuentaId, detalleUuid, ventaUuid, item.producto_uuid || null, item.producto, item.cantidad, item.precio, item.total, ventaFecha]
       );
@@ -94,7 +94,7 @@ export async function createVenta(req, res, next) {
       // Descuento de stock si tiene producto_uuid
       if (item.producto_uuid) {
         await connection.query(
-          `UPDATE productos SET cantidad = cantidad - ?
+          `UPDATE Productos SET cantidad = cantidad - ?
            WHERE uuid = ? AND cuenta_id = ?`,
           [item.cantidad, item.producto_uuid, cuentaId]
         );

@@ -39,7 +39,7 @@ export async function pushSync(req, res, next) {
     // 1. Categorías
     for (const c of categorias) {
       await connection.query(
-        `INSERT INTO categorias (cuenta_id, uuid, nombre, eliminado)
+        `INSERT INTO Categorias (cuenta_id, uuid, nombre, eliminado)
          VALUES (?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
            nombre = VALUES(nombre),
@@ -53,7 +53,7 @@ export async function pushSync(req, res, next) {
     // 2. Clientes
     for (const c of clientes) {
       await connection.query(
-        `INSERT INTO clientes (cuenta_id, uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, eliminado)
+        `INSERT INTO Clientes (cuenta_id, uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, eliminado)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
            nombre = VALUES(nombre),
@@ -72,7 +72,7 @@ export async function pushSync(req, res, next) {
     // 3. Proveedores
     for (const p of proveedores) {
       await connection.query(
-        `INSERT INTO proveedores (cuenta_id, uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, eliminado)
+        `INSERT INTO Proveedores (cuenta_id, uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, eliminado)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
            nombre = VALUES(nombre),
@@ -91,7 +91,7 @@ export async function pushSync(req, res, next) {
     // 4. Productos
     for (const prod of productos) {
       await connection.query(
-        `INSERT INTO productos (
+        `INSERT INTO Productos (
            cuenta_id, uuid, nombre, descripcion, categoria, categoria_uuid,
            proveedor, proveedor_uuid, marca, tamano, color, cantidad,
            costo, precio, unidad, maximo, minimo, fecha_vencimiento, foto, eliminado
@@ -129,7 +129,7 @@ export async function pushSync(req, res, next) {
     // 5. Ventas
     for (const v of ventas) {
       await connection.query(
-        `INSERT INTO ventas (cuenta_id, uuid, cliente, cliente_uuid, fecha, total, inicial, eliminado)
+        `INSERT INTO Ventas (cuenta_id, uuid, cliente, cliente_uuid, fecha, total, inicial, eliminado)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
            cliente = VALUES(cliente),
@@ -147,7 +147,7 @@ export async function pushSync(req, res, next) {
     // 6. Venta Detalles
     for (const vd of venta_detalles) {
       await connection.query(
-        `INSERT INTO venta_detalles (cuenta_id, uuid, venta_uuid, producto_uuid, producto, cantidad, precio, total, fecha, eliminado)
+        `INSERT INTO VentaDetalles (cuenta_id, uuid, venta_uuid, producto_uuid, producto, cantidad, precio, total, fecha, eliminado)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
            venta_uuid = VALUES(venta_uuid),
@@ -167,7 +167,7 @@ export async function pushSync(req, res, next) {
     // 7. Compras
     for (const c of compras) {
       await connection.query(
-        `INSERT INTO compras (cuenta_id, uuid, proveedor, proveedor_uuid, fecha, total, inicial, eliminado)
+        `INSERT INTO Compras (cuenta_id, uuid, proveedor, proveedor_uuid, fecha, total, inicial, eliminado)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
            proveedor = VALUES(proveedor),
@@ -185,7 +185,7 @@ export async function pushSync(req, res, next) {
     // 8. Compra Detalles
     for (const cd of compra_detalles) {
       await connection.query(
-        `INSERT INTO compra_detalles (cuenta_id, uuid, compra_uuid, producto_uuid, producto, cantidad, precio, total, fecha, eliminado)
+        `INSERT INTO CompraDetalles (cuenta_id, uuid, compra_uuid, producto_uuid, producto, cantidad, precio, total, fecha, eliminado)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
            compra_uuid = VALUES(compra_uuid),
@@ -205,7 +205,7 @@ export async function pushSync(req, res, next) {
     // 9. Abonos Clientes
     for (const a of abonos_clientes) {
       await connection.query(
-        `INSERT INTO abonos_clientes (cuenta_id, uuid, cliente, cliente_uuid, fecha, monto, eliminado)
+        `INSERT INTO AbonosClientes (cuenta_id, uuid, cliente, cliente_uuid, fecha, monto, eliminado)
          VALUES (?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
            cliente = VALUES(cliente),
@@ -222,7 +222,7 @@ export async function pushSync(req, res, next) {
     // 10. Pagos Proveedores
     for (const p of pagos_proveedores) {
       await connection.query(
-        `INSERT INTO pagos_proveedores (cuenta_id, uuid, proveedor, proveedor_uuid, fecha, monto, eliminado)
+        `INSERT INTO PagosAProveedores (cuenta_id, uuid, proveedor, proveedor_uuid, fecha, monto, eliminado)
          VALUES (?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
            proveedor = VALUES(proveedor),
@@ -238,7 +238,7 @@ export async function pushSync(req, res, next) {
 
     // Registro de log de sincronización
     await connection.query(
-      `INSERT INTO sync_logs (cuenta_id, dispositivo_id, tipo_operacion, registros_afectados, ip_origen)
+      `INSERT INTO SyncLogs (cuenta_id, dispositivo_id, tipo_operacion, registros_afectados, ip_origen)
        VALUES (?, ?, 'PUSH', ?, ?)`,
       [cuentaId, dispositivo_id, totalProcesados, req.ip || null]
     );
@@ -268,17 +268,17 @@ export async function pullSync(req, res, next) {
   try {
     // Consultamos cambios en cada entidad posteriores a 'since'
     const [categorias] = await pool.query(
-      'SELECT uuid, nombre, eliminado, updated_at FROM categorias WHERE cuenta_id = ? AND updated_at > ?',
+      'SELECT uuid, nombre, eliminado, updated_at FROM Categorias WHERE cuenta_id = ? AND updated_at > ?',
       [cuentaId, since]
     );
 
     const [clientes] = await pool.query(
-      'SELECT uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, eliminado, updated_at FROM clientes WHERE cuenta_id = ? AND updated_at > ?',
+      'SELECT uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, eliminado, updated_at FROM Clientes WHERE cuenta_id = ? AND updated_at > ?',
       [cuentaId, since]
     );
 
     const [proveedores] = await pool.query(
-      'SELECT uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, eliminado, updated_at FROM proveedores WHERE cuenta_id = ? AND updated_at > ?',
+      'SELECT uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, eliminado, updated_at FROM Proveedores WHERE cuenta_id = ? AND updated_at > ?',
       [cuentaId, since]
     );
 
@@ -286,37 +286,37 @@ export async function pullSync(req, res, next) {
       `SELECT uuid, nombre, descripcion, categoria, categoria_uuid, proveedor, proveedor_uuid,
               marca, tamano, color, cantidad, costo, precio, unidad, maximo, minimo,
               fecha_vencimiento, foto, eliminado, updated_at
-       FROM productos WHERE cuenta_id = ? AND updated_at > ?`,
+       FROM Productos WHERE cuenta_id = ? AND updated_at > ?`,
       [cuentaId, since]
     );
 
     const [ventas] = await pool.query(
-      'SELECT uuid, cliente, cliente_uuid, fecha, total, inicial, eliminado, updated_at FROM ventas WHERE cuenta_id = ? AND updated_at > ?',
+      'SELECT uuid, cliente, cliente_uuid, fecha, total, inicial, eliminado, updated_at FROM Ventas WHERE cuenta_id = ? AND updated_at > ?',
       [cuentaId, since]
     );
 
     const [venta_detalles] = await pool.query(
-      'SELECT uuid, venta_uuid, producto_uuid, producto, cantidad, precio, total, fecha, eliminado, updated_at FROM venta_detalles WHERE cuenta_id = ? AND updated_at > ?',
+      'SELECT uuid, venta_uuid, producto_uuid, producto, cantidad, precio, total, fecha, eliminado, updated_at FROM VentaDetalles WHERE cuenta_id = ? AND updated_at > ?',
       [cuentaId, since]
     );
 
     const [compras] = await pool.query(
-      'SELECT uuid, proveedor, proveedor_uuid, fecha, total, inicial, eliminado, updated_at FROM compras WHERE cuenta_id = ? AND updated_at > ?',
+      'SELECT uuid, proveedor, proveedor_uuid, fecha, total, inicial, eliminado, updated_at FROM Compras WHERE cuenta_id = ? AND updated_at > ?',
       [cuentaId, since]
     );
 
     const [compra_detalles] = await pool.query(
-      'SELECT uuid, compra_uuid, producto_uuid, producto, cantidad, precio, total, fecha, eliminado, updated_at FROM compra_detalles WHERE cuenta_id = ? AND updated_at > ?',
+      'SELECT uuid, compra_uuid, producto_uuid, producto, cantidad, precio, total, fecha, eliminado, updated_at FROM CompraDetalles WHERE cuenta_id = ? AND updated_at > ?',
       [cuentaId, since]
     );
 
     const [abonos_clientes] = await pool.query(
-      'SELECT uuid, cliente, cliente_uuid, fecha, monto, eliminado, updated_at FROM abonos_clientes WHERE cuenta_id = ? AND updated_at > ?',
+      'SELECT uuid, cliente, cliente_uuid, fecha, monto, eliminado, updated_at FROM AbonosClientes WHERE cuenta_id = ? AND updated_at > ?',
       [cuentaId, since]
     );
 
     const [pagos_proveedores] = await pool.query(
-      'SELECT uuid, proveedor, proveedor_uuid, fecha, monto, eliminado, updated_at FROM pagos_proveedores WHERE cuenta_id = ? AND updated_at > ?',
+      'SELECT uuid, proveedor, proveedor_uuid, fecha, monto, eliminado, updated_at FROM PagosAProveedores WHERE cuenta_id = ? AND updated_at > ?',
       [cuentaId, since]
     );
 
@@ -360,22 +360,22 @@ export async function getSyncStatus(req, res, next) {
     const cuentaId = req.user.id;
 
     const [[{ total_productos }]] = await pool.query(
-      'SELECT COUNT(*) as total_productos FROM productos WHERE cuenta_id = ? AND eliminado = 0',
+      'SELECT COUNT(*) as total_productos FROM Productos WHERE cuenta_id = ? AND eliminado = 0',
       [cuentaId]
     );
 
     const [[{ total_clientes }]] = await pool.query(
-      'SELECT COUNT(*) as total_clientes FROM clientes WHERE cuenta_id = ? AND eliminado = 0',
+      'SELECT COUNT(*) as total_clientes FROM Clientes WHERE cuenta_id = ? AND eliminado = 0',
       [cuentaId]
     );
 
     const [[{ total_ventas }]] = await pool.query(
-      'SELECT COUNT(*) as total_ventas FROM ventas WHERE cuenta_id = ? AND eliminado = 0',
+      'SELECT COUNT(*) as total_ventas FROM Ventas WHERE cuenta_id = ? AND eliminado = 0',
       [cuentaId]
     );
 
     const [lastSync] = await pool.query(
-      'SELECT created_at, tipo_operacion, registros_afectados FROM sync_logs WHERE cuenta_id = ? ORDER BY id DESC LIMIT 1',
+      'SELECT created_at, tipo_operacion, registros_afectados FROM SyncLogs WHERE cuenta_id = ? ORDER BY id DESC LIMIT 1',
       [cuentaId]
     );
 

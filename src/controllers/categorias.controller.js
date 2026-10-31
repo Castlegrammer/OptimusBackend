@@ -6,8 +6,8 @@ export async function getCategorias(req, res, next) {
     const cuentaId = req.user.id;
     const [rows] = await pool.query(
       `SELECT c.id, c.uuid, c.nombre, c.updated_at,
-              (SELECT COUNT(*) FROM productos p WHERE p.cuenta_id = c.cuenta_id AND p.categoria = c.nombre AND p.eliminado = 0) as total_productos
-       FROM categorias c
+              (SELECT COUNT(*) FROM Productos p WHERE p.cuenta_id = c.cuenta_id AND p.categoria = c.nombre AND p.eliminado = 0) as total_productos
+       FROM Categorias c
        WHERE c.cuenta_id = ? AND c.eliminado = 0
        ORDER BY c.nombre ASC`,
       [cuentaId]
@@ -32,7 +32,7 @@ export async function createCategoria(req, res, next) {
 
     const catUuid = uuidv4();
     const [result] = await pool.query(
-      `INSERT INTO categorias (cuenta_id, uuid, nombre, eliminado) VALUES (?, ?, ?, 0)`,
+      `INSERT INTO Categorias (cuenta_id, uuid, nombre, eliminado) VALUES (?, ?, ?, 0)`,
       [cuentaId, catUuid, nombre.trim()]
     );
 
@@ -54,7 +54,7 @@ export async function deleteCategoria(req, res, next) {
     const { uuid } = req.params;
 
     const [result] = await pool.query(
-      'UPDATE categorias SET eliminado = 1 WHERE uuid = ? AND cuenta_id = ?',
+      'UPDATE Categorias SET eliminado = 1 WHERE uuid = ? AND cuenta_id = ?',
       [uuid, cuentaId]
     );
 

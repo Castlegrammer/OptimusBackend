@@ -9,7 +9,7 @@ export async function getClientes(req, res, next) {
     const offset = (Number(page) - 1) * Number(limit);
     let query = `
       SELECT id, uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, updated_at
-      FROM clientes
+      FROM Clientes
       WHERE cuenta_id = ? AND eliminado = 0
     `;
     const params = [cuentaId];
@@ -43,7 +43,7 @@ export async function createCliente(req, res, next) {
     const today = new Date().toISOString().split('T')[0];
 
     const [result] = await pool.query(
-      `INSERT INTO clientes (cuenta_id, uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, eliminado)
+      `INSERT INTO Clientes (cuenta_id, uuid, nombre, responsable, direccion, telefono, zona, fecha_creacion, eliminado)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       [cuentaId, cliUuid, data.nombre, data.responsable || '', data.direccion || '', data.telefono || '', data.zona || '', today]
     );
@@ -66,7 +66,7 @@ export async function updateCliente(req, res, next) {
     const data = req.body;
 
     const [result] = await pool.query(
-      `UPDATE clientes SET
+      `UPDATE Clientes SET
          nombre = COALESCE(?, nombre),
          responsable = COALESCE(?, responsable),
          direccion = COALESCE(?, direccion),
@@ -98,7 +98,7 @@ export async function deleteCliente(req, res, next) {
     const { uuid } = req.params;
 
     const [result] = await pool.query(
-      'UPDATE clientes SET eliminado = 1 WHERE uuid = ? AND cuenta_id = ?',
+      'UPDATE Clientes SET eliminado = 1 WHERE uuid = ? AND cuenta_id = ?',
       [uuid, cuentaId]
     );
 
