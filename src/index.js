@@ -12,6 +12,7 @@ import syncRoutes from './routes/sync.routes.js';
 import productosRoutes from './routes/productos.routes.js';
 import clientesRoutes from './routes/clientes.routes.js';
 import ventasRoutes from './routes/ventas.routes.js';
+import categoriasRoutes from './routes/categorias.routes.js';
 
 dotenv.config();
 
@@ -65,6 +66,7 @@ app.use('/api/v1/sync', syncRoutes);
 app.use('/api/v1/productos', productosRoutes);
 app.use('/api/v1/clientes', clientesRoutes);
 app.use('/api/v1/ventas', ventasRoutes);
+app.use('/api/v1/categorias', categoriasRoutes);
 
 // Manejadores de error
 app.use(notFoundHandler);
