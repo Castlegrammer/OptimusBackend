@@ -93,12 +93,14 @@ app.get('/api/v1/health/db', async (req, res) => {
 app.post('/api/v1/health/setup-db', async (req, res) => {
   try {
     const reports = await initDatabaseTables();
-    const [tables] = await pool.query('SHOW TABLES');
+    const [colsP] = await pool.query('DESCRIBE `Proveedores`');
+    const [colsC] = await pool.query('DESCRIBE `Clientes`');
     res.json({
       success: true,
-      message: 'Tablas creadas y migradas exitosamente',
+      message: 'Estructura verificada',
       reports,
-      tables: tables.map(t => Object.values(t)[0])
+      proveedores_columns: colsP.map(c => c.Field),
+      clientes_columns: colsC.map(c => c.Field)
     });
   } catch (err) {
     res.status(500).json({
