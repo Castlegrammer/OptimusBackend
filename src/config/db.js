@@ -79,7 +79,22 @@ export async function initDatabaseTables() {
   await ensureCol('Clientes', 'eliminado', 'TINYINT(1) DEFAULT 0');
   await ensureCol('Clientes', 'updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
 
-  // 4. Asegurar tabla Cuenta
+  // 4. Asegurar columnas de Compras
+  await ensureCol('Compras', 'cuenta_id', 'INT DEFAULT 1');
+  await ensureCol('Compras', 'uuid', 'VARCHAR(36) DEFAULT NULL');
+  await ensureCol('Compras', 'proveedor', 'VARCHAR(150) DEFAULT NULL');
+  await ensureCol('Compras', 'Proveedor', 'VARCHAR(150) DEFAULT NULL');
+  await ensureCol('Compras', 'proveedor_uuid', 'VARCHAR(36) DEFAULT NULL');
+  await ensureCol('Compras', 'fecha', 'VARCHAR(50) DEFAULT NULL');
+  await ensureCol('Compras', 'Fecha', 'VARCHAR(50) DEFAULT NULL');
+  await ensureCol('Compras', 'total', 'DECIMAL(12,2) DEFAULT 0.00');
+  await ensureCol('Compras', 'Total', 'DECIMAL(12,2) DEFAULT 0.00');
+  await ensureCol('Compras', 'inicial', 'DECIMAL(12,2) DEFAULT 0.00');
+  await ensureCol('Compras', 'Inicial', 'DECIMAL(12,2) DEFAULT 0.00');
+  await ensureCol('Compras', 'eliminado', 'TINYINT(1) DEFAULT 0');
+  await ensureCol('Compras', 'Eliminado', 'TINYINT(1) DEFAULT 0');
+
+  // 5. Asegurar tabla Cuenta
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS \`Cuenta\` (

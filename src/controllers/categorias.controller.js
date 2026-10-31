@@ -123,6 +123,64 @@ export async function createCategoria(req, res, next) {
   }
 }
 
+export async function updateCategoria(req, res, next) {
+  try {
+    const cuentaId = req.user?.id || 1;
+    const { uuid } = req.params;
+    const { nombre } = req.body;
+
+    if (!nombre || !nombre.trim()) {
+      return res.status(400).json({ success: false, message: 'El nombre de la categoría es requerido.' });
+    }
+
+    const cleanNombre = nombre.trim();
+
+    // 1. Obtener nombre anterior
+    let oldName = null;
+    try {
+      const [old] = await pool.query(
+        'SELECT nombre, Nombre FROM Categorias WHERE (uuid = ? OR id = ?) AND (cuenta_id = ? OR cuenta_id IS NULL) LIMIT 1',
+        [uuid, uuid, cuentaId]
+      );
+      if (old.length > 0) {
+        oldName = old[0].nombre || old[0].Nombre;
+      }
+    } catch (e) {}
+
+    // 2. Actualizar Categoria
+    try {
+      await pool.query(
+        'UPDATE Categorias SET nombre = ?, Nombre = ? WHERE (uuid = ? OR id = ?) AND (cuenta_id = ? OR cuenta_id IS NULL)',
+        [cleanNombre, cleanNombre, uuid, uuid, cuentaId]
+      );
+    } catch (e1) {
+      await pool.query(
+        'UPDATE Categorias SET nombre = ? WHERE (uuid = ? OR id = ?)',
+        [cleanNombre, uuid, uuid]
+      );
+    }
+
+    // 3. Propagar cambio a Productos si cambió de nombre
+    if (oldName && oldName !== cleanNombre) {
+      try {
+        await pool.query(
+          'UPDATE Productos SET categoria = ? WHERE (categoria = ? OR categoria_uuid = ?) AND (cuenta_id = ? OR cuenta_id IS NULL)',
+          [cleanNombre, oldName, uuid, cuentaId]
+        );
+      } catch (eProd) {}
+    }
+
+    res.json({
+      success: true,
+      message: 'Categoría actualizada exitosamente',
+      uuid,
+      nombre: cleanNombre
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function deleteCategoria(req, res, next) {
   try {
     const cuentaId = req.user?.id || 1;

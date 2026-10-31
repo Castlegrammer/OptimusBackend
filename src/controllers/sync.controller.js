@@ -261,21 +261,41 @@ export async function pushSync(req, res, next) {
 
     // 7. Compras
     for (const c of compras) {
+      const cTotal = Number(c.total) || 0;
+      const cInicial = Number(c.inicial !== undefined ? c.inicial : c.total) || 0;
+      const cFecha = c.fecha || new Date().toISOString().split('T')[0];
+      const cProv = c.proveedor || 'Proveedor Directo';
+
       try {
         await connection.query(
-          `INSERT INTO Compras (cuenta_id, uuid, proveedor, proveedor_uuid, fecha, total, inicial, eliminado)
+          `INSERT INTO Compras (cuenta_id, uuid, Proveedor, proveedor_uuid, Fecha, Total, Inicial, Eliminado)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE
-             proveedor = VALUES(proveedor),
+             Proveedor = VALUES(Proveedor),
              proveedor_uuid = VALUES(proveedor_uuid),
-             fecha = VALUES(fecha),
-             total = VALUES(total),
-             inicial = VALUES(inicial),
-             eliminado = VALUES(eliminado)`,
-          [cuentaId, c.uuid, c.proveedor || '', c.proveedor_uuid || null, c.fecha || '', c.total || 0, c.inicial || 0, c.eliminado ? 1 : 0]
+             Fecha = VALUES(Fecha),
+             Total = VALUES(Total),
+             Inicial = VALUES(Inicial),
+             Eliminado = VALUES(Eliminado)`,
+          [cuentaId, c.uuid, cProv, c.proveedor_uuid || null, cFecha, cTotal, cInicial, c.eliminado ? 1 : 0]
         );
-      } catch (eC) {
-        console.warn('Sync push compra error:', eC.message);
+      } catch (eC1) {
+        try {
+          await connection.query(
+            `INSERT INTO Compras (cuenta_id, uuid, proveedor, proveedor_uuid, fecha, total, inicial, eliminado)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+               proveedor = VALUES(proveedor),
+               proveedor_uuid = VALUES(proveedor_uuid),
+               fecha = VALUES(fecha),
+               total = VALUES(total),
+               inicial = VALUES(inicial),
+               eliminado = VALUES(eliminado)`,
+            [cuentaId, c.uuid, cProv, c.proveedor_uuid || null, cFecha, cTotal, cInicial, c.eliminado ? 1 : 0]
+          );
+        } catch (eC2) {
+          console.warn('Sync push compra error:', eC2.message);
+        }
       }
       syncedUuids.compras.push(c.uuid);
       totalProcesados++;
@@ -530,10 +550,24 @@ export async function pullSync(req, res, next) {
     let compras = [];
     try {
       const [resC] = await pool.query(
-        'SELECT * FROM Compras WHERE (cuenta_id = ? OR (cuenta_id IS NULL AND ? = 1))',
+        'SELECT * FROM Compras WHERE (cuenta_id = ? OR (cuenta_id IS NULL AND ? = 1)) ORDER BY 1 DESC',
         [cuentaId, cuentaId]
       );
-      compras = resC;
+      compras = resC.map(c => {
+        const totalNum = Number(c.Total ?? c.total ?? c.monto ?? c.Monto ?? 0);
+        const inicialNum = Number(c.Inicial ?? c.inicial ?? totalNum);
+        return {
+          id: c.IDCompra || c.id || c.ID,
+          uuid: c.uuid || `COM-${c.IDCompra || c.id || Date.now()}`,
+          proveedor: c.Proveedor || c.proveedor || 'Proveedor Directo',
+          proveedor_uuid: c.proveedor_uuid || null,
+          fecha: c.Fecha || c.fecha || '',
+          total: isNaN(totalNum) ? 0 : totalNum,
+          inicial: isNaN(inicialNum) ? 0 : inicialNum,
+          eliminado: (c.Eliminado == 1 || c.eliminado == 1) ? 1 : 0,
+          updated_at: c.updated_at || c.Fecha || serverTime
+        };
+      });
     } catch (eC) {
       console.warn('Sync compras pull warning:', eC.message);
     }

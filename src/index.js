@@ -14,6 +14,7 @@ import clientesRoutes from './routes/clientes.routes.js';
 import proveedoresRoutes from './routes/proveedores.routes.js';
 import ventasRoutes from './routes/ventas.routes.js';
 import categoriasRoutes from './routes/categorias.routes.js';
+import comprasRoutes from './routes/compras.routes.js';
 
 dotenv.config();
 
@@ -118,6 +119,7 @@ app.use('/api/v1/clientes', clientesRoutes);
 app.use('/api/v1/proveedores', proveedoresRoutes);
 app.use('/api/v1/ventas', ventasRoutes);
 app.use('/api/v1/categorias', categoriasRoutes);
+app.use('/api/v1/compras', comprasRoutes);
 
 // Manejadores de error
 app.use(notFoundHandler);
