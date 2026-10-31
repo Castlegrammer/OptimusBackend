@@ -9,8 +9,8 @@ async function findUserByEmail(email) {
 
   try {
     const [rows] = await pool.query(
-      `SELECT * FROM \`Cuenta\` WHERE LOWER(COALESCE(email, Email, '')) = ? LIMIT 1`,
-      [cleanEmail]
+      `SELECT * FROM \`Cuenta\` WHERE LOWER(COALESCE(email, Email, '')) = ? OR LOWER(COALESCE(Nombre, nombre, '')) = ? LIMIT 1`,
+      [cleanEmail, cleanEmail]
     );
     if (rows && rows.length > 0) {
       return { user: rows[0], tableName: 'Cuenta' };
@@ -18,10 +18,11 @@ async function findUserByEmail(email) {
   } catch (err) {
     if (err.code !== 'ER_NO_SUCH_TABLE') {
       try {
-        const [allRows] = await pool.query(`SELECT * FROM \`Cuenta\` LIMIT 50`);
+        const [allRows] = await pool.query(`SELECT * FROM \`Cuenta\` LIMIT 100`);
         const match = allRows.find(r => {
-          const rowEmail = String(r.email || r.Email || r.correo || r.Correo || r.usuario || r.Usuario || '').trim().toLowerCase();
-          return rowEmail === cleanEmail;
+          const rowEmail = String(r.email || r.Email || r.correo || r.Correo || '').trim().toLowerCase();
+          const rowName = String(r.Nombre || r.nombre || r.usuario || r.Usuario || '').trim().toLowerCase();
+          return rowEmail === cleanEmail || rowName === cleanEmail;
         });
         if (match) return { user: match, tableName: 'Cuenta' };
       } catch (e2) {}
@@ -31,8 +32,8 @@ async function findUserByEmail(email) {
   // Fallback a Usuario si existiera
   try {
     const [rows] = await pool.query(
-      `SELECT * FROM \`Usuario\` WHERE LOWER(COALESCE(email, Email, '')) = ? LIMIT 1`,
-      [cleanEmail]
+      `SELECT * FROM \`Usuario\` WHERE LOWER(COALESCE(email, Email, '')) = ? OR LOWER(COALESCE(Nombre, nombre, '')) = ? LIMIT 1`,
+      [cleanEmail, cleanEmail]
     );
     if (rows && rows.length > 0) {
       return { user: rows[0], tableName: 'Usuario' };
@@ -87,28 +88,29 @@ export async function login(req, res, next) {
       });
     }
 
-    // Si la contraseña no estaba encriptada en la BD, la encriptamos de inmediato
-    if (shouldEncrypt) {
-      try {
-        const salt = await bcrypt.genSalt(10);
-        const hash = await bcrypt.hash(password, salt);
-        try {
-          await pool.query(`UPDATE ${tableName} SET password_hash = ? WHERE LOWER(email) = LOWER(?)`, [hash, email]);
-        } catch (e1) {}
-        try {
-          await pool.query(`UPDATE ${tableName} SET Clave = ? WHERE LOWER(email) = LOWER(?)`, [hash, email]);
-        } catch (e2) {}
-      } catch (errEnc) {
-        console.error("Error auto-encriptando clave:", errEnc);
-      }
-    }
-
     const userId = user.id || user.IDCuenta || user.IDUsuario || user.Id || 1;
     const userUuid = user.uuid || user.UUID || uuidv4();
     const userName = user.Nombre || user.nombre || 'Administrador';
     const userEmail = user.email || user.Email || email;
     const userMoneda = user.Moneda || user.moneda || 'USD';
     const userTipo = user.Tipo || user.tipo || 'Administrador';
+    const userFecha = user.Fecha || user.fecha || '';
+
+    // Si la contraseña no estaba encriptada en la BD, la encriptamos de inmediato
+    if (shouldEncrypt) {
+      try {
+        const salt = await bcrypt.genSalt(10);
+        const hash = await bcrypt.hash(password, salt);
+        try {
+          await pool.query(`UPDATE ${tableName} SET password_hash = ? WHERE id = ?`, [hash, userId]);
+        } catch (e1) {}
+        try {
+          await pool.query(`UPDATE ${tableName} SET Clave = ? WHERE id = ?`, [hash, userId]);
+        } catch (e2) {}
+      } catch (errEnc) {
+        console.error("Error auto-encriptando clave:", errEnc);
+      }
+    }
 
     const token = jwt.sign(
       {
@@ -133,7 +135,8 @@ export async function login(req, res, next) {
         nombre: userName,
         email: userEmail,
         moneda: userMoneda,
-        tipo: userTipo
+        tipo: userTipo,
+        fecha: userFecha
       }
     });
   } catch (error) {
