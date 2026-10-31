@@ -29,6 +29,26 @@ app.use(morgan('dev'));
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
+// Ruta de bienvenida en la raíz
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: '🚀 Optimus360 API REST está activa y en línea',
+    version: '1.0.0',
+    documentation: '/api/v1/health',
+    endpoints: {
+      health: '/api/v1/health',
+      auth: '/api/v1/auth/login',
+      sync_push: '/api/v1/sync/push',
+      sync_pull: '/api/v1/sync/pull',
+      sync_status: '/api/v1/sync/status',
+      productos: '/api/v1/productos',
+      clientes: '/api/v1/clientes',
+      ventas: '/api/v1/ventas'
+    }
+  });
+});
+
 // Health Check
 app.get('/api/v1/health', (req, res) => {
   res.json({
