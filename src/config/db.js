@@ -36,33 +36,50 @@ export async function testDbConnection() {
 export async function initDatabaseTables() {
   const reports = [];
 
-  // 1. Asegurar columna fecha_creacion en Proveedores
-  try {
-    await pool.query(`ALTER TABLE \`Proveedores\` ADD COLUMN \`fecha_creacion\` VARCHAR(50) DEFAULT NULL`);
-    reports.push('Proveedores: fecha_creacion añadida');
-    console.log('✅ Columna fecha_creacion asegurada en tabla Proveedores');
-  } catch (e) {
-    if (e.code === 'ER_DUP_FIELDNAME' || e.errno === 1060) {
-      reports.push('Proveedores: fecha_creacion ya existe');
-    } else {
-      reports.push(`Proveedores error: ${e.message}`);
+  // Helper para añadir columnas de forma segura
+  async function ensureCol(table, col, colDef) {
+    try {
+      await pool.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${col}\` ${colDef}`);
+      reports.push(`${table}: ${col} añadida`);
+    } catch (e) {
+      if (e.code === 'ER_DUP_FIELDNAME' || e.errno === 1060) {
+        reports.push(`${table}: ${col} ya existe`);
+      } else {
+        reports.push(`${table} ${col} err: ${e.message}`);
+      }
     }
   }
 
-  // 2. Asegurar columna fecha_creacion en Clientes
-  try {
-    await pool.query(`ALTER TABLE \`Clientes\` ADD COLUMN \`fecha_creacion\` VARCHAR(50) DEFAULT NULL`);
-    reports.push('Clientes: fecha_creacion añadida');
-    console.log('✅ Columna fecha_creacion asegurada en tabla Clientes');
-  } catch (e) {
-    if (e.code === 'ER_DUP_FIELDNAME' || e.errno === 1060) {
-      reports.push('Clientes: fecha_creacion ya existe');
-    } else {
-      reports.push(`Clientes error: ${e.message}`);
-    }
-  }
+  // 1. Asegurar columnas de Categorías (aislado por cuenta_id de usuario)
+  await ensureCol('Categorias', 'cuenta_id', 'INT DEFAULT 1');
+  await ensureCol('Categorias', 'uuid', 'VARCHAR(36) DEFAULT NULL');
+  await ensureCol('Categorias', 'eliminado', 'TINYINT(1) DEFAULT 0');
+  await ensureCol('Categorias', 'created_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+  await ensureCol('Categorias', 'updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
 
-  // 3. Asegurar tabla Cuenta
+  // 2. Asegurar columnas de Proveedores
+  await ensureCol('Proveedores', 'cuenta_id', 'INT DEFAULT 1');
+  await ensureCol('Proveedores', 'uuid', 'VARCHAR(36) DEFAULT NULL');
+  await ensureCol('Proveedores', 'responsable', 'VARCHAR(150) DEFAULT NULL');
+  await ensureCol('Proveedores', 'direccion', 'VARCHAR(255) DEFAULT NULL');
+  await ensureCol('Proveedores', 'telefono', 'VARCHAR(50) DEFAULT NULL');
+  await ensureCol('Proveedores', 'zona', 'VARCHAR(100) DEFAULT "Principal"');
+  await ensureCol('Proveedores', 'fecha_creacion', 'VARCHAR(50) DEFAULT NULL');
+  await ensureCol('Proveedores', 'eliminado', 'TINYINT(1) DEFAULT 0');
+  await ensureCol('Proveedores', 'updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+
+  // 3. Asegurar columnas de Clientes
+  await ensureCol('Clientes', 'cuenta_id', 'INT DEFAULT 1');
+  await ensureCol('Clientes', 'uuid', 'VARCHAR(36) DEFAULT NULL');
+  await ensureCol('Clientes', 'responsable', 'VARCHAR(150) DEFAULT NULL');
+  await ensureCol('Clientes', 'direccion', 'VARCHAR(255) DEFAULT NULL');
+  await ensureCol('Clientes', 'telefono', 'VARCHAR(50) DEFAULT NULL');
+  await ensureCol('Clientes', 'zona', 'VARCHAR(100) DEFAULT "Principal"');
+  await ensureCol('Clientes', 'fecha_creacion', 'VARCHAR(50) DEFAULT NULL');
+  await ensureCol('Clientes', 'eliminado', 'TINYINT(1) DEFAULT 0');
+  await ensureCol('Clientes', 'updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+
+  // 4. Asegurar tabla Cuenta
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS \`Cuenta\` (
@@ -88,7 +105,7 @@ export async function initDatabaseTables() {
     reports.push(`Cuenta error: ${e.message}`);
   }
 
-  // 4. Si la tabla Cuenta está vacía, insertar cuenta Administrador inicial
+  // 5. Si la tabla Cuenta está vacía, insertar cuenta Administrador inicial
   try {
     const [existing] = await pool.query('SELECT COUNT(*) as count FROM `Cuenta`');
     if (existing[0]?.count === 0) {

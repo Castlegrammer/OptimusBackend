@@ -12,9 +12,9 @@ export async function getProductos(req, res, next) {
              marca, tamano, color, cantidad, costo, precio, unidad, maximo, minimo,
              fecha_vencimiento, foto, updated_at
       FROM Productos
-      WHERE cuenta_id = ? AND eliminado = 0
+      WHERE (cuenta_id = ? OR (cuenta_id IS NULL AND ? = 1)) AND (eliminado = 0 OR eliminado IS NULL)
     `;
-    const params = [cuentaId];
+    const params = [cuentaId, cuentaId];
 
     if (search) {
       query += ` AND (nombre LIKE ? OR marca LIKE ? OR descripcion LIKE ?)`;
