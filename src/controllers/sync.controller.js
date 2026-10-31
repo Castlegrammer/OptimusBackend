@@ -397,16 +397,19 @@ export async function pushSync(req, res, next) {
 
 export async function pullSync(req, res, next) {
   const cuentaId = req.user?.id || 1;
+  const userTipo = req.user?.tipo || 'Administrador';
+  const isAdmin = userTipo === 'Administrador' || cuentaId === 1;
+  const adminFlag = isAdmin ? 1 : 0;
   const since = req.query.since || '1970-01-01 00:00:00';
   const serverTime = new Date().toISOString();
 
   try {
-    // 1. Categorías (filtradas por cuenta del usuario)
+    // 1. Categorías (filtradas por cuenta o accesibles si es admin)
     let categorias = [];
     try {
       const [resCat] = await pool.query(
-        'SELECT * FROM Categorias WHERE (cuenta_id = ? OR (cuenta_id IS NULL AND ? = 1)) AND (eliminado = 0 OR eliminado IS NULL)',
-        [cuentaId, cuentaId]
+        'SELECT * FROM Categorias WHERE (cuenta_id = ? OR cuenta_id IS NULL OR cuenta_id = 1 OR ? = 1) AND (eliminado = 0 OR eliminado IS NULL)',
+        [cuentaId, adminFlag]
       );
       categorias = resCat.map(c => ({
         id: c.id || c.IDCategoria || c.ID,
@@ -419,14 +422,14 @@ export async function pullSync(req, res, next) {
       console.warn('Sync categorias pull warning:', eCat.message);
     }
 
-    // 2. Clientes (filtrados por cuenta del usuario)
+    // 2. Clientes (filtrados por cuenta o accesibles si es admin)
     let clientes = [];
     try {
       const [resCli] = await pool.query('SELECT * FROM Clientes ORDER BY 1 DESC');
       clientes = resCli
         .filter(r => {
           const rowCuentaId = r.cuenta_id ?? r.IDCuenta ?? r.id_cuenta;
-          return (rowCuentaId == cuentaId) || (cuentaId == 1 && (rowCuentaId == null || rowCuentaId == 0 || rowCuentaId == 1));
+          return isAdmin || (rowCuentaId == cuentaId) || (rowCuentaId == null || rowCuentaId == 0 || rowCuentaId == 1);
         })
         .map(c => ({
           id: c.IDCliente || c.id || c.ID,
@@ -444,14 +447,14 @@ export async function pullSync(req, res, next) {
       console.warn('Sync clientes pull fallback:', eCli.message);
     }
 
-    // 3. Proveedores (filtrados por cuenta del usuario)
+    // 3. Proveedores (filtrados por cuenta o accesibles si es admin)
     let proveedores = [];
     try {
       const [resProv] = await pool.query('SELECT * FROM Proveedores ORDER BY 1 DESC');
       proveedores = resProv
         .filter(r => {
           const rowCuentaId = r.cuenta_id ?? r.IDCuenta ?? r.id_cuenta;
-          return (rowCuentaId == cuentaId) || (cuentaId == 1 && (rowCuentaId == null || rowCuentaId == 0 || rowCuentaId == 1));
+          return isAdmin || (rowCuentaId == cuentaId) || (rowCuentaId == null || rowCuentaId == 0 || rowCuentaId == 1);
         })
         .map(p => ({
           id: p.IDProveedor || p.IDCliente || p.id || p.ID,
@@ -469,12 +472,12 @@ export async function pullSync(req, res, next) {
       console.warn('Sync proveedores pull fallback:', eProv.message);
     }
 
-    // 4. Productos (filtrados por cuenta del usuario)
+    // 4. Productos (filtrados por cuenta o accesibles si es admin)
     let productos = [];
     try {
       const [resProd] = await pool.query(
-        'SELECT * FROM Productos WHERE (cuenta_id = ? OR (cuenta_id IS NULL AND ? = 1)) AND (eliminado = 0 OR eliminado IS NULL)',
-        [cuentaId, cuentaId]
+        'SELECT * FROM Productos WHERE (cuenta_id = ? OR cuenta_id IS NULL OR cuenta_id = 1 OR ? = 1) AND (eliminado = 0 OR eliminado IS NULL)',
+        [cuentaId, adminFlag]
       );
       productos = resProd.map(p => ({
         uuid: p.uuid || `PROD-${p.id || p.IDProducto || p.ID}`,
@@ -502,12 +505,12 @@ export async function pullSync(req, res, next) {
       console.warn('Sync productos pull warning:', eProd.message);
     }
 
-    // 5. Ventas (filtradas por cuenta del usuario)
+    // 5. Ventas (filtradas por cuenta o accesibles si es admin)
     let ventas = [];
     try {
       const [resV] = await pool.query(
-        'SELECT * FROM Ventas WHERE (cuenta_id = ? OR (cuenta_id IS NULL AND ? = 1))',
-        [cuentaId, cuentaId]
+        'SELECT * FROM Ventas WHERE (cuenta_id = ? OR cuenta_id IS NULL OR cuenta_id = 1 OR ? = 1)',
+        [cuentaId, adminFlag]
       );
       ventas = resV.map(v => ({
         uuid: v.uuid || `VNT-${v.id || v.IDVenta || v.ID}`,
@@ -527,8 +530,8 @@ export async function pullSync(req, res, next) {
     let venta_detalles = [];
     try {
       const [resVD] = await pool.query(
-        'SELECT * FROM VentaDetalles WHERE (cuenta_id = ? OR (cuenta_id IS NULL AND ? = 1))',
-        [cuentaId, cuentaId]
+        'SELECT * FROM VentaDetalles WHERE (cuenta_id = ? OR cuenta_id IS NULL OR cuenta_id = 1 OR ? = 1)',
+        [cuentaId, adminFlag]
       );
       venta_detalles = resVD.map(vd => ({
         uuid: vd.uuid || `VD-${vd.id || vd.ID}`,
@@ -550,8 +553,8 @@ export async function pullSync(req, res, next) {
     let compras = [];
     try {
       const [resC] = await pool.query(
-        'SELECT * FROM Compras WHERE (cuenta_id = ? OR (cuenta_id IS NULL AND ? = 1)) ORDER BY 1 DESC',
-        [cuentaId, cuentaId]
+        'SELECT * FROM Compras WHERE (cuenta_id = ? OR cuenta_id IS NULL OR cuenta_id = 1 OR ? = 1) ORDER BY 1 DESC',
+        [cuentaId, adminFlag]
       );
       compras = resC.map(c => {
         const totalNum = Number(c.Total ?? c.total ?? c.monto ?? c.Monto ?? 0);
@@ -576,8 +579,8 @@ export async function pullSync(req, res, next) {
     let compra_detalles = [];
     try {
       const [resCD] = await pool.query(
-        'SELECT * FROM CompraDetalles WHERE (cuenta_id = ? OR (cuenta_id IS NULL AND ? = 1))',
-        [cuentaId, cuentaId]
+        'SELECT * FROM CompraDetalles WHERE (cuenta_id = ? OR cuenta_id IS NULL OR cuenta_id = 1 OR ? = 1)',
+        [cuentaId, adminFlag]
       );
       compra_detalles = resCD;
     } catch (eCD) {
@@ -588,8 +591,8 @@ export async function pullSync(req, res, next) {
     let abonos_clientes = [];
     try {
       const [resAC] = await pool.query(
-        'SELECT * FROM AbonosClientes WHERE (cuenta_id = ? OR (cuenta_id IS NULL AND ? = 1))',
-        [cuentaId, cuentaId]
+        'SELECT * FROM AbonosClientes WHERE (cuenta_id = ? OR cuenta_id IS NULL OR cuenta_id = 1 OR ? = 1)',
+        [cuentaId, adminFlag]
       );
       abonos_clientes = resAC;
     } catch (eAC) {
@@ -600,8 +603,8 @@ export async function pullSync(req, res, next) {
     let pagos_proveedores = [];
     try {
       const [resPP] = await pool.query(
-        'SELECT * FROM PagosAProveedores WHERE (cuenta_id = ? OR (cuenta_id IS NULL AND ? = 1))',
-        [cuentaId, cuentaId]
+        'SELECT * FROM PagosAProveedores WHERE (cuenta_id = ? OR cuenta_id IS NULL OR cuenta_id = 1 OR ? = 1)',
+        [cuentaId, adminFlag]
       );
       pagos_proveedores = resPP;
     } catch (ePP) {
