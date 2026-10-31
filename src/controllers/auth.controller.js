@@ -3,33 +3,41 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../config/db.js';
 
-// Helper robusto para obtener el usuario desde cualquier tabla existente (Cuenta, Usuario, cuentas, etc.)
+// Helper para obtener el usuario desde la tabla Cuenta (y fallback Usuario)
 async function findUserByEmail(email) {
-  const candidateTables = ['Cuenta', 'cuentas', 'Usuario', 'usuarios', 'cuenta', 'usuario'];
   const cleanEmail = String(email || '').trim().toLowerCase();
 
-  for (const table of candidateTables) {
-    try {
-      const [rows] = await pool.query(
-        `SELECT * FROM \`${table}\` WHERE LOWER(COALESCE(email, Email, '')) = ? LIMIT 1`,
-        [cleanEmail]
-      );
-      if (rows && rows.length > 0) {
-        return { user: rows[0], tableName: table };
-      }
-    } catch (err) {
-      if (err.code !== 'ER_NO_SUCH_TABLE') {
-        try {
-          const [allRows] = await pool.query(`SELECT * FROM \`${table}\` LIMIT 50`);
-          const match = allRows.find(r => {
-            const rowEmail = String(r.email || r.Email || r.correo || r.Correo || r.usuario || r.Usuario || '').trim().toLowerCase();
-            return rowEmail === cleanEmail;
-          });
-          if (match) return { user: match, tableName: table };
-        } catch (e2) {}
-      }
+  try {
+    const [rows] = await pool.query(
+      `SELECT * FROM \`Cuenta\` WHERE LOWER(COALESCE(email, Email, '')) = ? LIMIT 1`,
+      [cleanEmail]
+    );
+    if (rows && rows.length > 0) {
+      return { user: rows[0], tableName: 'Cuenta' };
+    }
+  } catch (err) {
+    if (err.code !== 'ER_NO_SUCH_TABLE') {
+      try {
+        const [allRows] = await pool.query(`SELECT * FROM \`Cuenta\` LIMIT 50`);
+        const match = allRows.find(r => {
+          const rowEmail = String(r.email || r.Email || r.correo || r.Correo || r.usuario || r.Usuario || '').trim().toLowerCase();
+          return rowEmail === cleanEmail;
+        });
+        if (match) return { user: match, tableName: 'Cuenta' };
+      } catch (e2) {}
     }
   }
+
+  // Fallback a Usuario si existiera
+  try {
+    const [rows] = await pool.query(
+      `SELECT * FROM \`Usuario\` WHERE LOWER(COALESCE(email, Email, '')) = ? LIMIT 1`,
+      [cleanEmail]
+    );
+    if (rows && rows.length > 0) {
+      return { user: rows[0], tableName: 'Usuario' };
+    }
+  } catch (e3) {}
 
   return { user: null, tableName: 'Cuenta' };
 }

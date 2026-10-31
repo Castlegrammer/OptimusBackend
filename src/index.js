@@ -68,14 +68,9 @@ app.get('/api/v1/health/db', async (req, res) => {
     
     let userCount = 0;
     try {
-      const [c] = await pool.query('SELECT COUNT(*) as count FROM `cuentas`');
+      const [c] = await pool.query('SELECT COUNT(*) as count FROM `Cuenta`');
       userCount = c[0].count;
-    } catch (e1) {
-      try {
-        const [c2] = await pool.query('SELECT COUNT(*) as count FROM `Cuenta`');
-        userCount = c2[0].count;
-      } catch (e2) {}
-    }
+    } catch (e1) {}
 
     res.json({
       success: true,
