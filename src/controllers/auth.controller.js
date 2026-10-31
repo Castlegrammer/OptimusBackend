@@ -3,23 +3,43 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../config/db.js';
 
-export async function login(req, res, next) {
+// Helper para obtener el usuario desde Cuenta o Usuario (soporta ambos nombres)
+async function findUserByEmail(email) {
   try {
-    const { email, password } = req.body;
-
     const [rows] = await pool.query(
       'SELECT * FROM Cuenta WHERE LOWER(email) = LOWER(?) LIMIT 1',
       [email]
     );
+    if (rows.length > 0) return { user: rows[0], tableName: 'Cuenta' };
+  } catch (err) {
+    if (err.code !== 'ER_NO_SUCH_TABLE') throw err;
+  }
 
-    if (rows.length === 0) {
+  try {
+    const [rows] = await pool.query(
+      'SELECT * FROM Usuario WHERE LOWER(email) = LOWER(?) LIMIT 1',
+      [email]
+    );
+    if (rows.length > 0) return { user: rows[0], tableName: 'Usuario' };
+  } catch (err) {
+    if (err.code !== 'ER_NO_SUCH_TABLE') throw err;
+  }
+
+  return { user: null, tableName: 'Cuenta' };
+}
+
+export async function login(req, res, next) {
+  try {
+    const { email, password } = req.body;
+
+    const { user, tableName } = await findUserByEmail(email);
+
+    if (!user) {
       return res.status(401).json({
         success: false,
         message: 'Credenciales inválidas. Usuario no encontrado.'
       });
     }
-
-    const user = rows[0];
 
     // Verificar si está inactivo o eliminado si existen las columnas
     if (user.eliminado === 1 || user.activo === 0) {
@@ -35,14 +55,14 @@ export async function login(req, res, next) {
     } else if (user.Clave || user.clave) {
       const storedPass = user.Clave || user.clave;
       isMatch = (storedPass === password);
-      // Si hizo match con la clave plana, actualizamos el password_hash
+      // Si hizo match con la clave plana, intentamos actualizar el password_hash
       if (isMatch) {
         try {
           const salt = await bcrypt.genSalt(10);
           const hash = await bcrypt.hash(password, salt);
-          await pool.query('UPDATE Cuenta SET password_hash = ? WHERE LOWER(email) = LOWER(?)', [hash, email]);
+          await pool.query(`UPDATE ${tableName} SET password_hash = ? WHERE LOWER(email) = LOWER(?)`, [hash, email]);
         } catch (e) {
-          // ignora si no existe la columna en MySQL
+          // ignora si no existe la columna password_hash
         }
       }
     }
@@ -54,7 +74,7 @@ export async function login(req, res, next) {
       });
     }
 
-    const userId = user.id || user.IDCuenta || user.Id || 1;
+    const userId = user.id || user.IDCuenta || user.IDUsuario || user.Id || 1;
     const userUuid = user.uuid || user.UUID || uuidv4();
     const userName = user.Nombre || user.nombre || 'Administrador';
     const userEmail = user.email || user.Email || email;
@@ -96,12 +116,9 @@ export async function register(req, res, next) {
   try {
     const { nombre, email, password, moneda = 'USD', tipo = 'Administrador' } = req.body;
 
-    const [existing] = await pool.query(
-      'SELECT email FROM Cuenta WHERE LOWER(email) = LOWER(?) LIMIT 1',
-      [email]
-    );
+    const { user } = await findUserByEmail(email);
 
-    if (existing.length > 0) {
+    if (user) {
       return res.status(409).json({
         success: false,
         message: 'El correo electrónico ya se encuentra registrado.'
@@ -113,8 +130,15 @@ export async function register(req, res, next) {
     const userUuid = uuidv4();
     const today = new Date().toISOString().split('T')[0];
 
+    let targetTable = 'Cuenta';
+    try {
+      await pool.query('SELECT 1 FROM Cuenta LIMIT 1');
+    } catch (e) {
+      targetTable = 'Usuario';
+    }
+
     const [result] = await pool.query(
-      `INSERT INTO Cuenta (uuid, Nombre, email, Clave, password_hash, Moneda, Tipo, Fecha, activo, eliminado)
+      `INSERT INTO ${targetTable} (uuid, Nombre, email, Clave, password_hash, Moneda, Tipo, Fecha, activo, eliminado)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0)`,
       [userUuid, nombre, email, password, passwordHash, moneda, tipo, today]
     );
@@ -154,23 +178,19 @@ export async function register(req, res, next) {
 
 export async function getProfile(req, res, next) {
   try {
-    const [rows] = await pool.query(
-      'SELECT * FROM Cuenta WHERE id = ? OR LOWER(email) = LOWER(?) LIMIT 1',
-      [req.user.id, req.user.email]
-    );
+    const { user } = await findUserByEmail(req.user.email);
 
-    if (rows.length === 0) {
+    if (!user) {
       return res.status(404).json({
         success: false,
         message: 'Usuario no encontrado'
       });
     }
 
-    const user = rows[0];
     res.json({
       success: true,
       user: {
-        id: user.id || user.IDCuenta || req.user.id,
+        id: user.id || user.IDCuenta || user.IDUsuario || req.user.id,
         uuid: user.uuid || req.user.uuid,
         nombre: user.Nombre || user.nombre,
         email: user.email || user.Email,
