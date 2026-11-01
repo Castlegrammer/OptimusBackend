@@ -13,7 +13,7 @@ export function errorHandler(err, req, res, next) {
 
   // Personalización de mensajes comunes de base de datos MySQL y validación
   if (err.code === 'ER_BAD_FIELD_ERROR' || String(err.message).includes('Unknown column')) {
-    customMessage = 'Discrepancia en las columnas de la base de datos. La operación fue registrada y corregida.';
+    customMessage = `Discrepancia en las columnas de la base de datos (${err.message || 'Columna no reconocida'}).`;
   } else if (err.code === 'ER_DUP_ENTRY' || String(err.message).includes('Duplicate entry')) {
     customMessage = 'Ya existe un registro con esos mismos datos en el sistema.';
   } else if (err.code === 'ER_NO_SUCH_TABLE') {
