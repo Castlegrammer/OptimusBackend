@@ -255,6 +255,9 @@ export async function updateProducto(req, res, next) {
         if (lowerCol in candidateUpdates) {
           setClauses.push(`\`${col}\` = ?`);
           setVals.push(candidateUpdates[lowerCol]);
+        } else if (data.cantidad !== undefined && (lowerCol === 'existencia' || lowerCol === 'stock' || lowerCol === 'stock_actual')) {
+          setClauses.push(`\`${col}\` = ?`);
+          setVals.push(parseFloat(data.cantidad) || 0);
         }
       }
     } else {
@@ -270,27 +273,49 @@ export async function updateProducto(req, res, next) {
       return res.json({ success: true, message: 'Nada que actualizar' });
     }
 
-    // Agregar condiciones WHERE seguras
+    // Extraer posible ID numérico si uuid viene como 'PROD-1' o '1'
+    const cleanId = String(uuid).replace(/^PROD-/i, '').trim();
+    const isNum = /^\d+$/.test(cleanId);
+    const numId = isNum ? parseInt(cleanId, 10) : null;
+
+    // Agregar condiciones WHERE seguras y compatibles
     const whereConditions = [];
     if (columns.some(c => c.toLowerCase() === 'uuid')) {
       whereConditions.push('`uuid` = ?');
       setVals.push(uuid);
     }
-    if (columns.some(c => c.toLowerCase() === 'id')) {
-      whereConditions.push('`id` = ?');
-      setVals.push(uuid);
+    const colId = columns.find(c => c.toLowerCase() === 'id');
+    if (colId) {
+      if (numId !== null) {
+        whereConditions.push(`\`${colId}\` = ?`);
+        setVals.push(numId);
+      } else {
+        whereConditions.push(`\`${colId}\` = ?`);
+        setVals.push(uuid);
+      }
     }
-    if (columns.some(c => c.toLowerCase() === 'idproducto')) {
-      whereConditions.push('`IDProducto` = ?');
-      setVals.push(uuid);
+    const colIdProd = columns.find(c => c.toLowerCase() === 'idproducto');
+    if (colIdProd) {
+      if (numId !== null) {
+        whereConditions.push(`\`${colIdProd}\` = ?`);
+        setVals.push(numId);
+      } else {
+        whereConditions.push(`\`${colIdProd}\` = ?`);
+        setVals.push(uuid);
+      }
+    }
+    const colNombre = columns.find(c => c.toLowerCase() === 'nombre' || c.toLowerCase() === 'name');
+    if (colNombre && data.nombre) {
+      whereConditions.push(`LOWER(\`${colNombre}\`) = LOWER(?)`);
+      setVals.push(String(data.nombre).trim());
     }
 
     let whereClause = whereConditions.length > 0 ? `(${whereConditions.join(' OR ')})` : '`id` = ?';
     if (whereConditions.length === 0) setVals.push(uuid);
 
     if (columns.some(c => c.toLowerCase() === 'cuenta_id')) {
-      whereClause += ' AND (`cuenta_id` = ? OR `cuenta_id` IS NULL)';
-      setVals.push(cuentaId);
+      whereClause += ' AND (`cuenta_id` = ? OR `cuenta_id` IS NULL OR ? = 1)';
+      setVals.push(cuentaId, cuentaId);
     }
 
     const sql = `UPDATE \`${tableName}\` SET ${setClauses.join(', ')} WHERE ${whereClause}`;

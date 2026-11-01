@@ -1,9 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../config/db.js';
 
-// Cache de columnas de tablas de Ventas y VentaDetalles
+// Cache de columnas de tablas de Ventas, VentaDetalles y Productos
 let ventasTableCache = null;
 let ventaDetallesTableCache = null;
+let productosTableCache = null;
 
 async function getVentasTableInfo() {
   if (ventasTableCache) return ventasTableCache;
@@ -31,6 +32,20 @@ async function getVentaDetallesTableInfo() {
     } catch (e) {}
   }
   return { tableName: 'VentaDetalles', columns: [] };
+}
+
+async function getProductosTableInfo() {
+  if (productosTableCache) return productosTableCache;
+  for (const table of ['Productos', 'productos', 'PRODUCTOS']) {
+    try {
+      const [cols] = await pool.query(`SHOW COLUMNS FROM \`${table}\``);
+      if (cols && cols.length > 0) {
+        productosTableCache = { tableName: table, columns: cols.map(c => c.Field) };
+        return productosTableCache;
+      }
+    } catch (e) {}
+  }
+  return { tableName: 'Productos', columns: [] };
 }
 
 export async function getVentas(req, res, next) {
@@ -333,52 +348,107 @@ export async function createVenta(req, res, next) {
         console.warn('Advertencia insertando detalle de venta:', errDet.message);
       }
 
-      // 3. Descontar stock del producto en la tabla Productos de forma robusta
+      // 3. Descontar stock del producto en la tabla de Productos de forma robusta y dinámica
       if (itemQty > 0 && (prodUuid || prodId || prodName)) {
-        const idVal = prodUuid || prodId || '';
         try {
-          await connection.query(
-            `UPDATE Productos 
-             SET cantidad = GREATEST(0, COALESCE(cantidad, 0) - ?)
-             WHERE (
-               (uuid IS NOT NULL AND uuid != '' AND uuid = ?) OR 
-               (id IS NOT NULL AND (id = ? OR id = ?)) OR 
-               (IDProducto IS NOT NULL AND (IDProducto = ? OR IDProducto = ?)) OR 
-               (nombre IS NOT NULL AND LOWER(nombre) = LOWER(?)) OR
-               (Nombre IS NOT NULL AND LOWER(Nombre) = LOWER(?))
-             ) AND (cuenta_id = ? OR cuenta_id IS NULL OR ? = 1)`,
-            [itemQty, idVal, idVal, prodId, idVal, prodId, prodName, prodName, cuentaId, cuentaId]
+          const prodInfo = await getProductosTableInfo();
+          const pCols = prodInfo.columns || [];
+          const pTable = prodInfo.tableName || 'Productos';
+
+          // Detectar columnas de stock (cantidad, Cantidad, existencia, stock, etc.)
+          const stockCols = pCols.filter(c => 
+            ['cantidad', 'existencia', 'stock', 'stock_actual'].includes(c.toLowerCase())
           );
-        } catch (eStock1) {
-          try {
-            await connection.query(
-              `UPDATE Productos 
-               SET Cantidad = GREATEST(0, COALESCE(Cantidad, 0) - ?)
-               WHERE (
-                 (uuid IS NOT NULL AND uuid != '' AND uuid = ?) OR 
-                 (id IS NOT NULL AND (id = ? OR id = ?)) OR 
-                 (IDProducto IS NOT NULL AND (IDProducto = ? OR IDProducto = ?)) OR 
-                 (nombre IS NOT NULL AND LOWER(nombre) = LOWER(?)) OR
-                 (Nombre IS NOT NULL AND LOWER(Nombre) = LOWER(?))
-               ) AND (cuenta_id = ? OR cuenta_id IS NULL OR ? = 1)`,
-              [itemQty, idVal, idVal, prodId, idVal, prodId, prodName, prodName, cuentaId, cuentaId]
-            );
-          } catch (eStock2) {
+          const activeStockCols = stockCols.length > 0 ? stockCols : ['cantidad'];
+
+          const idCol = pCols.find(c => c.toLowerCase() === 'id') || 
+                        pCols.find(c => c.toLowerCase() === 'idproducto') || 'id';
+          const uuidCol = pCols.find(c => c.toLowerCase() === 'uuid');
+          const nameCol = pCols.find(c => c.toLowerCase() === 'nombre' || c.toLowerCase() === 'name');
+
+          // Extraer posible ID numérico limpio
+          let numericId = null;
+          if (prodId && /^\d+$/.test(String(prodId))) {
+            numericId = parseInt(prodId, 10);
+          } else if (prodUuid && /^PROD-(\d+)$/i.test(String(prodUuid))) {
+            numericId = parseInt(String(prodUuid).replace(/^PROD-/i, ''), 10);
+          } else if (prodUuid && /^\d+$/.test(String(prodUuid))) {
+            numericId = parseInt(prodUuid, 10);
+          }
+
+          // 3.1 Buscar primero la fila exacta del producto en MySQL
+          let foundRow = null;
+
+          if (uuidCol && prodUuid && !String(prodUuid).startsWith('PROD-')) {
             try {
-              await connection.query(
-                `UPDATE productos 
-                 SET cantidad = GREATEST(0, COALESCE(cantidad, 0) - ?)
-                 WHERE (
-                   (uuid IS NOT NULL AND uuid != '' AND uuid = ?) OR 
-                   (id IS NOT NULL AND (id = ? OR id = ?)) OR 
-                   (nombre IS NOT NULL AND LOWER(nombre) = LOWER(?))
-                 ) AND (cuenta_id = ? OR cuenta_id IS NULL OR ? = 1)`,
-                [itemQty, idVal, idVal, prodId, prodName, cuentaId, cuentaId]
+              const [rows] = await connection.query(
+                `SELECT * FROM \`${pTable}\` WHERE \`${uuidCol}\` = ? LIMIT 1`,
+                [prodUuid]
               );
-            } catch (eStock3) {
-              console.warn('Descuento de stock bypass:', eStock3.message);
+              if (rows.length > 0) foundRow = rows[0];
+            } catch (eFind1) {}
+          }
+
+          if (!foundRow && numericId && idCol) {
+            try {
+              const [rows] = await connection.query(
+                `SELECT * FROM \`${pTable}\` WHERE \`${idCol}\` = ? LIMIT 1`,
+                [numericId]
+              );
+              if (rows.length > 0) foundRow = rows[0];
+            } catch (eFind2) {}
+          }
+
+          if (!foundRow && nameCol && prodName) {
+            try {
+              const [rows] = await connection.query(
+                `SELECT * FROM \`${pTable}\` WHERE LOWER(\`${nameCol}\`) = LOWER(?) LIMIT 1`,
+                [prodName.trim()]
+              );
+              if (rows.length > 0) foundRow = rows[0];
+            } catch (eFind3) {}
+          }
+
+          // 3.2 Si encontramos la fila exacta por clave primaria, descontar directamente
+          if (foundRow) {
+            const rowPkVal = foundRow[idCol];
+            const setStatements = activeStockCols.map(c => `\`${c}\` = GREATEST(0, COALESCE(\`${c}\`, 0) - ?)`).join(', ');
+            const setParams = activeStockCols.map(() => itemQty);
+            await connection.query(
+              `UPDATE \`${pTable}\` SET ${setStatements} WHERE \`${idCol}\` = ?`,
+              [...setParams, rowPkVal]
+            );
+            console.log(`[Ventas] Stock descontado (-${itemQty}) para producto ID ${rowPkVal} (${prodName})`);
+          } else {
+            // 3.3 Fallback con UPDATE condicional seguro
+            const setStatements = activeStockCols.map(c => `\`${c}\` = GREATEST(0, COALESCE(\`${c}\`, 0) - ?)`).join(', ');
+            const setParams = activeStockCols.map(() => itemQty);
+            const whereOr = [];
+            const whereParams = [];
+
+            if (numericId && idCol) {
+              whereOr.push(`\`${idCol}\` = ?`);
+              whereParams.push(numericId);
+            }
+            if (nameCol && prodName) {
+              whereOr.push(`LOWER(\`${nameCol}\`) = LOWER(?)`);
+              whereParams.push(prodName.trim());
+            }
+            if (uuidCol && prodUuid) {
+              whereOr.push(`\`${uuidCol}\` = ?`);
+              whereParams.push(prodUuid);
+            }
+
+            if (whereOr.length > 0) {
+              await connection.query(
+                `UPDATE \`${pTable}\` SET ${setStatements} WHERE (${whereOr.join(' OR ')})`,
+                [...setParams, ...whereParams]
+              );
+              console.log(`[Ventas] Stock descontado por fallback para producto: ${prodName}`);
             }
           }
+        } catch (stockErr) {
+          console.error('[Ventas] Error descontando stock:', stockErr.message);
         }
       }
     }
