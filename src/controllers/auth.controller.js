@@ -234,3 +234,65 @@ export async function getProfile(req, res, next) {
     next(error);
   }
 }
+
+export async function updateProfile(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const userEmail = req.user.email;
+    const { nombre, moneda } = req.body;
+
+    if (!nombre && !moneda) {
+      return res.status(400).json({
+        success: false,
+        message: 'Debe especificar al menos un campo para actualizar.'
+      });
+    }
+
+    let targetTable = 'Cuenta';
+    try {
+      await pool.query('SELECT 1 FROM Cuenta LIMIT 1');
+    } catch (e) {
+      targetTable = 'Usuario';
+    }
+
+    if (nombre && String(nombre).trim()) {
+      const cleanNombre = String(nombre).trim();
+      try {
+        await pool.query(`UPDATE ${targetTable} SET Nombre = ? WHERE id = ? OR IDCuenta = ? OR email = ?`, [cleanNombre, userId, userId, userEmail]);
+      } catch (e1) {
+        try {
+          await pool.query(`UPDATE ${targetTable} SET nombre = ? WHERE id = ? OR IDCuenta = ? OR email = ?`, [cleanNombre, userId, userId, userEmail]);
+        } catch (e2) {}
+      }
+    }
+
+    if (moneda && String(moneda).trim()) {
+      const cleanMoneda = String(moneda).trim().toUpperCase();
+      try {
+        await pool.query(`UPDATE ${targetTable} SET Moneda = ? WHERE id = ? OR IDCuenta = ? OR email = ?`, [cleanMoneda, userId, userId, userEmail]);
+      } catch (e1) {
+        try {
+          await pool.query(`UPDATE ${targetTable} SET moneda = ? WHERE id = ? OR IDCuenta = ? OR email = ?`, [cleanMoneda, userId, userId, userEmail]);
+        } catch (e2) {}
+      }
+    }
+
+    const { user } = await findUserByEmail(userEmail);
+    const updatedUser = {
+      id: user?.id || user?.IDCuenta || userId,
+      uuid: user?.uuid || req.user.uuid,
+      nombre: user?.Nombre || user?.nombre || nombre || req.user.nombre,
+      email: user?.email || user?.Email || userEmail,
+      moneda: user?.Moneda || user?.moneda || moneda || req.user.moneda || 'USD',
+      tipo: user?.Tipo || user?.tipo || req.user.tipo || 'Administrador'
+    };
+
+    res.json({
+      success: true,
+      message: 'Perfil de usuario actualizado exitosamente',
+      user: updatedUser
+    });
+  } catch (error) {
+    next(error);
+  }
+}
