@@ -145,30 +145,46 @@ export async function createVenta(req, res, next) {
       }
 
       // 3. Descontar stock del producto en la tabla Productos
-      if (prodUuid || prodId) {
-        const identifier = prodUuid || prodId;
+      if (itemQty > 0 && (prodUuid || prodId || prodName)) {
+        const idVal = prodUuid || prodId || '';
         try {
           await connection.query(
             `UPDATE Productos 
              SET cantidad = GREATEST(0, COALESCE(cantidad, 0) - ?)
-             WHERE (uuid = ? OR id = ? OR IDProducto = ?) AND (cuenta_id = ? OR cuenta_id IS NULL OR ? = 1)`,
-            [itemQty, identifier, identifier, identifier, cuentaId, cuentaId]
+             WHERE (
+               (uuid IS NOT NULL AND uuid != '' AND uuid = ?) OR 
+               (id IS NOT NULL AND (id = ? OR id = ?)) OR 
+               (IDProducto IS NOT NULL AND (IDProducto = ? OR IDProducto = ?)) OR 
+               (nombre IS NOT NULL AND LOWER(nombre) = LOWER(?)) OR
+               (Nombre IS NOT NULL AND LOWER(Nombre) = LOWER(?))
+             ) AND (cuenta_id = ? OR cuenta_id IS NULL OR ? = 1)`,
+            [itemQty, idVal, idVal, prodId, idVal, prodId, prodName, prodName, cuentaId, cuentaId]
           );
         } catch (eStock1) {
           try {
             await connection.query(
               `UPDATE Productos 
                SET Cantidad = GREATEST(0, COALESCE(Cantidad, 0) - ?)
-               WHERE (uuid = ? OR id = ? OR IDProducto = ?) AND (cuenta_id = ? OR cuenta_id IS NULL OR ? = 1)`,
-              [itemQty, identifier, identifier, identifier, cuentaId, cuentaId]
+               WHERE (
+                 (uuid IS NOT NULL AND uuid != '' AND uuid = ?) OR 
+                 (id IS NOT NULL AND (id = ? OR id = ?)) OR 
+                 (IDProducto IS NOT NULL AND (IDProducto = ? OR IDProducto = ?)) OR 
+                 (nombre IS NOT NULL AND LOWER(nombre) = LOWER(?)) OR
+                 (Nombre IS NOT NULL AND LOWER(Nombre) = LOWER(?))
+               ) AND (cuenta_id = ? OR cuenta_id IS NULL OR ? = 1)`,
+              [itemQty, idVal, idVal, prodId, idVal, prodId, prodName, prodName, cuentaId, cuentaId]
             );
           } catch (eStock2) {
             try {
               await connection.query(
                 `UPDATE productos 
                  SET cantidad = GREATEST(0, COALESCE(cantidad, 0) - ?)
-                 WHERE (uuid = ? OR id = ?) AND (cuenta_id = ? OR cuenta_id IS NULL OR ? = 1)`,
-                [itemQty, identifier, identifier, cuentaId, cuentaId]
+                 WHERE (
+                   (uuid IS NOT NULL AND uuid != '' AND uuid = ?) OR 
+                   (id IS NOT NULL AND (id = ? OR id = ?)) OR 
+                   (nombre IS NOT NULL AND LOWER(nombre) = LOWER(?))
+                 ) AND (cuenta_id = ? OR cuenta_id IS NULL OR ? = 1)`,
+                [itemQty, idVal, idVal, prodId, prodName, cuentaId, cuentaId]
               );
             } catch (eStock3) {
               console.warn('Descuento de stock bypass:', eStock3.message);

@@ -45,11 +45,14 @@ export const proveedorCreateSchema = z.object({
 
 export const ventaItemSchema = z.object({
   producto_uuid: z.string().nullable().optional(),
+  producto_id: z.any().optional(),
+  id: z.any().optional(),
+  uuid: z.string().nullable().optional(),
   producto: z.string().min(1, 'Nombre de producto requerido'),
   cantidad: numericField(1),
   precio: numericField(0),
   total: numericField(0)
-});
+}).passthrough();
 
 export const ventaCreateSchema = z.object({
   cliente: z.string().optional().default(''),
