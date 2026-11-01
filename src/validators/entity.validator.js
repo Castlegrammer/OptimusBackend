@@ -59,6 +59,9 @@ export const ventaCreateSchema = z.object({
   cliente_uuid: z.string().nullable().optional(),
   fecha: z.string().optional(),
   total: numericField(0),
+  total_usd: numericField(0).optional(),
+  total_bs: numericField(0).optional(),
+  tasa_bcv: numericField(0).optional(),
   inicial: numericField(0),
   detalles: z.array(ventaItemSchema).min(1, 'La venta debe contener al menos un detalle')
-});
+}).passthrough();
